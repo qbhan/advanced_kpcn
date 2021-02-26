@@ -4,6 +4,8 @@ from random import randint
 
 from scipy import ndimage
 
+from preprocess import *
+
 patch_size = 64 # patches are 64x64
 n_patches = 400
 
@@ -201,6 +203,7 @@ def importanceSampling(data, debug=False):
       
   return (pruned + pad)
 
+
 def crop(data, pos, patch_size):
   half_patch = patch_size // 2
   sx, sy = half_patch, half_patch
@@ -208,3 +211,10 @@ def crop(data, pos, patch_size):
   return {key: val[(py-sy):(py+sy+1),(px-sx):(px+sx+1),:] 
           for key, val in data.items()}
 
+
+def get_cropped_patches(sample_file, gt_file):
+  data = preprocess_input(sample_file, gt_file)
+  patches = importanceSampling(data)
+  cropped = list(crop(data, tuple(pos), patch_size) for pos in patches)
+  
+  return cropped

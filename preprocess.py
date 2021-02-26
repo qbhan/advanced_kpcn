@@ -1,5 +1,6 @@
 import numpy as np
 import pyexr
+# import OpenEXR
 
 # patch_size = 64 # patches are 64x64
 # n_patches = 400
@@ -57,6 +58,7 @@ def remove_channels(data, channels):
 def preprocess_input(filename, gt, debug=False):
   
   file = pyexr.open(filename)
+  # file = OpenEXR.InputFile(filename)
   data = file.get_all()
   
   if debug:
@@ -70,6 +72,7 @@ def preprocess_input(filename, gt, debug=False):
     
     
   file_gt = pyexr.open(gt)
+  # file_gt = OpenEXR.InputFile(gt)
   gt_data = file_gt.get_all()
   
   # just in case
