@@ -6,8 +6,8 @@ from scipy import ndimage
 
 from preprocess import *
 
-patch_size = 64 # patches are 64x64
-n_patches = 400
+# patch_size = 64 # patches are 64x64
+# n_patches = 400
 
 def getVarianceMap(data, patch_size, relative=False):
 
@@ -150,8 +150,8 @@ def prunePatches(shape, patches, patchsize, imp):
   return pruned[:count,:]
   
   
-def importanceSampling(data, debug=False):
-  global patch_size, n_patches
+def importanceSampling(data, patch_size, n_patches, debug=False):
+#   global patch_size, n_patches
   
   # extract buffers
   buffers = []
@@ -212,9 +212,9 @@ def crop(data, pos, patch_size):
           for key, val in data.items()}
 
 
-def get_cropped_patches(sample_file, gt_file):
+def get_cropped_patches(sample_file, gt_file, patch_size, n_patches):
   data = preprocess_input(sample_file, gt_file)
-  patches = importanceSampling(data)
+  patches = importanceSampling(data, patch_size, n_patches)
   cropped = list(crop(data, tuple(pos), patch_size) for pos in patches)
-  
+  print(len)
   return cropped
