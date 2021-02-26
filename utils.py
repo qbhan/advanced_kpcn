@@ -16,7 +16,7 @@ def to_torch_tensors(data):
   return data
 
 
-def send_to_device(data):
+def send_to_device(data, device):
   if isinstance(data, dict):
     for k, v in data.items():
       if isinstance(v, torch.Tensor):
