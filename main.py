@@ -74,13 +74,10 @@ def train_dpcn(dataset, n_layers, n_kernels, size_kernel, in_channels, hidden_ch
   torch.save(ddiffuseNet.state_dict(), 'trained_model/ddiffuseNet.pt')
   torch.save(dspecularNet.state_dict(), 'trained_model/dspecularNet.pt')
   with open('plot/dpcn.csv', 'w', newline='') as f:
-    w_dlDiff = dlDiff[dlDiff == float("Inf")] = 0
-    w_dlSpec = dlSpec[dlSpec == float("Inf")] = 0
-    w_dlFinal = dlFinal[dlFinal == float("Inf")] = 0
     writer = csv.writer(f)
-    writer.writerow(w_dlDiff)
-    writer.writerow(w_dlSpec)
-    writer.writerow(w_dlFinal)
+    writer.writerow(dlDiff)
+    writer.writerow(dlSpec)
+    writer.writerow(dlFinal)
   return ddiffuseNet, dspecularNet, dlDiff, dlSpec, dlFinal
 
 
@@ -91,13 +88,10 @@ def train_kpcn(dataset, n_layers, n_kernels, size_kernel, in_channels, hidden_ch
   torch.save(kdiffuseNet.state_dict(), 'trained_model/kdiffuseNet.pt')
   torch.save(kspecularNet.state_dict(), 'trained_model/kspecularNet.pt')
   with open('plot/kpcn.csv', 'w', newline='') as f:
-    w_klDiff = klDiff[klDiff == float("Inf")] = 0
-    w_klSpec = klSpec[klSpec == float("Inf")] = 0
-    w_klFinal = klFinal[klFinal == float("Inf")] = 0
     writer = csv.writer(f)
-    writer.writerow(w_klDiff)
-    writer.writerow(w_klSpec)
-    writer.writerow(w_klFinal)
+    writer.writerow(klDiff)
+    writer.writerow(klSpec)
+    writer.writerow(klFinal)
   return kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal
 
 
@@ -107,13 +101,10 @@ def train_feat_dpcn(dataset, n_layers, n_kernels, size_kernel, in_channels, hidd
   torch.save(ddiffuseNet.state_dict(), 'trained_model/feat_ddiffuseNet.pt')
   torch.save(dspecularNet.state_dict(), 'trained_model/feat_dspecularNet.pt')
   with open('plot/feat_dpcn.csv', 'w', newline='') as f:
-    w_dlDiff = dlDiff[dlDiff == float("Inf")] = 0
-    w_dlSpec = dlSpec[dlSpec == float("Inf")] = 0
-    w_dlFinal = dlFinal[dlFinal == float("Inf")] = 0
     writer = csv.writer(f)
-    writer.writerow(w_dlDiff)
-    writer.writerow(w_dlSpec)
-    writer.writerow(w_dlFinal)
+    writer.writerow(dlDiff)
+    writer.writerow(dlSpec)
+    writer.writerow(dlFinal)
   return ddiffuseNet, dspecularNet, dlDiff, dlSpec, dlFinal
 
 
@@ -123,13 +114,10 @@ def train_feat_kpcn(dataset, n_layers, n_kernels, size_kernel, in_channels, hidd
   torch.save(kdiffuseNet.state_dict(), 'trained_model/feat_kdiffuseNet.pt')
   torch.save(kspecularNet.state_dict(), 'trained_model/feat_kspecularNet.pt')
   with open('plot/feat_kpcn.csv', 'w', newline='') as f:
-    w_klDiff = klDiff[klDiff == float("Inf")] = 0
-    w_klSpec = klSpec[klSpec == float("Inf")] = 0
-    w_klFinal = klFinal[klFinal == float("Inf")] = 0
     writer = csv.writer(f)
-    writer.writerow(w_klDiff)
-    writer.writerow(w_klSpec)
-    writer.writerow(w_klFinal)
+    writer.writerow(klDiff)
+    writer.writerow(klSpec)
+    writer.writerow(klFinal)
   return kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal
 
 
