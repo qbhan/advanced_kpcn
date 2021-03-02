@@ -5,6 +5,10 @@ import torchvision
 import torchvision.transforms as transforms
 import torch.optim as optim
 
+import matplotlib.pyplot as plt
+# from torch.utils.tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
+
 from utils import *
 from model import *
 
@@ -45,6 +49,9 @@ def train(dataset, input_channels, device, feat=False,mode='KPCN', epochs=20, le
   lDiff = []
   lSpec = []
   lFinal = []
+
+  writer = SummaryWriter('runs/'+mode)
+
 
   import time
 
@@ -125,6 +132,10 @@ def train(dataset, input_channels, device, feat=False,mode='KPCN', epochs=20, le
       accuLossDiff += lossDiff.item()
       accuLossSpec += lossSpec.item()
 
+      writer.add_scalar('total loss', accuLossFinal if accuLossFinal != float('inf') else 0, epoch * len(dataloader) + i_batch)
+      writer.add_scalar('diffuse loss', accuLossDiff if accuLossDiff != float('inf') else 0, epoch * len(dataloader) + i_batch)
+      writer.add_scalar('specular loss', accuLossSpec if accuLossSpec != float('inf') else 0, epoch * len(dataloader) + i_batch)
+
     print("Epoch {}".format(epoch + 1))
     print("LossDiff: {}".format(accuLossDiff))
     print("LossSpec: {}".format(accuLossSpec))
@@ -138,6 +149,7 @@ def train(dataset, input_channels, device, feat=False,mode='KPCN', epochs=20, le
     accuLossSpec = 0
     accuLossFinal = 0
 
+  writer.close()
   print('Finished training in mode', mode)
   print('Took', time.time() - start, 'seconds.')
   
