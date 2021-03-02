@@ -72,7 +72,6 @@ def preprocess_input(filename, gt, debug=False):
     
     
   file_gt = pyexr.open(gt)
-  # file_gt = OpenEXR.InputFile(gt)
   gt_data = file_gt.get_all()
   
   # just in case
