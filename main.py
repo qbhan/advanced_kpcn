@@ -27,25 +27,45 @@ from train import *
 from model import *
 
 
-def image_preprocess(patch_size, n_patches):
+def image_preprocess(patch_size, n_patches, val=False):
   cropped = []
-  cropped += get_cropped_patches("sample_data/sample.exr", "sample_data/gt.exr", patch_size, n_patches)
-  for f in glob.glob('sample_data/sample*.exr'):
+  if not val:
+    cropped += get_cropped_patches("sample_data/sample.exr", "sample_data/gt.exr", patch_size, n_patches)
+    for f in glob.glob('sample_data/sample*.exr'):
 
-    if f == 'sample_data/sample.exr': continue
+      if f == 'sample_data\sample.exr': continue
 
-    num = f[len('sample_data/sample'):f.index('.')]
-    sample_name = 'sample_data/sample{}.exr'.format(num)
-    gt_name = 'sample_data/gt{}.exr'.format(num)
-    print(sample_name, gt_name)
-    cropped += get_cropped_patches(sample_name, gt_name, patch_size, n_patches)
+      num = f[len('sample_data/sample'):f.index('.')]
+      sample_name = 'sample_data/sample{}.exr'.format(num)
+      gt_name = 'sample_data/gt{}.exr'.format(num)
+      print(sample_name, gt_name)
+      cropped += get_cropped_patches(sample_name, gt_name, patch_size, n_patches)
 
-  print('Patches cropped : ' + str(len(cropped)))
-  print('Saving patches')
-  # save the training data
-  for i, v in enumerate(cropped):
-    torch.save(v, 'data/sample'+str(i+1)+'.pt')
-    # print('SAVED data/sample'+str(i+1)+'.pt')
+    print('Patches cropped : ' + str(len(cropped)))
+    print('Saving patches')
+    # save the training data
+    for i, v in enumerate(cropped):
+      torch.save(v, 'data/sample'+str(i+1)+'.pt')
+      # print('SAVED data/sample'+str(i+1)+'.pt')
+  else:
+    for f in glob.glob('sample_data/evalref*.exr'):
+      print(f)
+      if f == 'sample_data\evalref1.exr': 
+        print('RESERVE FOR TEST')
+        continue
+
+      num = f[len('sample_data/evalref'):f.index('.')]
+      sample_name = 'sample_data/eval{}.exr'.format(num)
+      gt_name = 'sample_data/evalref{}.exr'.format(num)
+      print(sample_name, gt_name)
+      cropped += get_cropped_patches(sample_name, gt_name, patch_size, n_patches)
+
+    print('Patches cropped : ' + str(len(cropped)))
+    print('Saving patches')
+    # save the training data
+    for i, v in enumerate(cropped):
+      torch.save(v, 'val/eval'+str(i+1)+'.pt')
+      # print('SAVED data/sample'+str(i+1)+'.pt')
 
   # Check sizes of data
   for k, v in cropped[0].items():
@@ -54,23 +74,29 @@ def image_preprocess(patch_size, n_patches):
   print(getsize(cropped) / 1024 / 1024, "MiB")
 
 
-def load_dataset(device):
+def load_dataset(device, val=False):
   # If already saved the data, load them
   cropped = []
-  for patch in os.listdir('data/'):
-    print('Loading patch : ' + patch)
-    cropped.append(torch.load('data/'+ patch))
-  
-  # load to device and make dataset
+  if not val:
+    for patch in os.listdir('data/'):
+      print('Loading patch : ' + patch)
+      cropped.append(torch.load('data/'+ patch))
+  else:
+    for patch in os.listdir('val/'):
+      print('Loading patch : ' + patch)
+      cropped.append(torch.load('val/'+ patch))
+    
+    # load to device and make dataset
   cropped = to_torch_tensors(cropped)
   cropped = send_to_device(cropped, device)
   dataset = KPCNDataset(cropped)
   return dataset
 
 
-def train_dpcn(dataset, n_layers, n_kernels, size_kernel, in_channels, hidden_channels, save_dir=None):
+
+def train_dpcn(dataset, n_layers, n_kernels, size_kernel, in_channels, hidden_channels, save_dir=None, valDataset=None):
   pass
-  ddiffuseNet, dspecularNet, dlDiff, dlSpec, dlFinal = train(dataset, input_channels, device, feat=False, mode='DPCN', epochs=40, learning_rate=1e-5)
+  ddiffuseNet, dspecularNet, dlDiff, dlSpec, dlFinal = train(dataset, in_channels, device, feat=False, validDataSet=valDataset, mode='DPCN', epochs=40, learning_rate=1e-5)
   torch.save(ddiffuseNet.state_dict(), 'trained_model/ddiffuseNet.pt')
   torch.save(dspecularNet.state_dict(), 'trained_model/dspecularNet.pt')
   with open('plot/dpcn.csv', 'w', newline='') as f:
@@ -84,7 +110,7 @@ def train_dpcn(dataset, n_layers, n_kernels, size_kernel, in_channels, hidden_ch
 
 def train_kpcn(dataset, n_layers, n_kernels, size_kernel, in_channels, hidden_channels, recon_kernel_size, save_dir=None):
   pass
-  kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal = train(dataset, input_channels, device, feat=False, mode='KPCN', epochs=40, learning_rate=1e-5)
+  kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal = train(dataset, in_channels, device, feat=False, mode='KPCN', epochs=40, learning_rate=1e-5)
   torch.save(kdiffuseNet.state_dict(), 'trained_model/kdiffuseNet.pt')
   torch.save(kspecularNet.state_dict(), 'trained_model/kspecularNet.pt')
   with open('plot/kpcn.csv', 'w', newline='') as f:
@@ -97,7 +123,7 @@ def train_kpcn(dataset, n_layers, n_kernels, size_kernel, in_channels, hidden_ch
 
 def train_feat_dpcn(dataset, n_layers, n_kernels, size_kernel, in_channels, hidden_channels, save_dir=None):
   pass
-  ddiffuseNet, dspecularNet, dlDiff, dlSpec, dlFinal = train(dataset, input_channels, device, feat=True, mode='DPCN', epochs=40, learning_rate=1e-5)
+  ddiffuseNet, dspecularNet, dlDiff, dlSpec, dlFinal = train(dataset, in_channels, device, feat=True, mode='DPCN', epochs=40, learning_rate=1e-5)
   torch.save(ddiffuseNet.state_dict(), 'trained_model/feat_ddiffuseNet.pt')
   torch.save(dspecularNet.state_dict(), 'trained_model/feat_dspecularNet.pt')
   with open('plot/feat_dpcn.csv', 'w', newline='') as f:
@@ -110,7 +136,7 @@ def train_feat_dpcn(dataset, n_layers, n_kernels, size_kernel, in_channels, hidd
 
 def train_feat_kpcn(dataset, n_layers, n_kernels, size_kernel, in_channels, hidden_channels, recon_kernel_size, save_dir=None):
   pass
-  kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal = train(dataset, input_channels, device, feat=True, mode='KPCN', epochs=40, learning_rate=1e-5)
+  kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal = train(dataset, in_channels, device, feat=True, mode='KPCN', epochs=40, learning_rate=1e-5)
   torch.save(kdiffuseNet.state_dict(), 'trained_model/feat_kdiffuseNet.pt')
   torch.save(kspecularNet.state_dict(), 'trained_model/feat_kspecularNet.pt')
   with open('plot/feat_kpcn.csv', 'w', newline='') as f:
@@ -148,17 +174,20 @@ if __name__ == '__main__':
   eps = 0.00316
 
   # image_preprocess(patch_size, n_patches)
+  # image_preprocess(patch_size, n_patches, val=True)
   dataset = load_dataset(device)
+  valDataset = load_dataset(device, val=True)
+
 
   input_channels = dataset[0]['X_diff'].shape[-1]  #28
-  # input_channels = 28
+  # # input_channels = 28
   hidden_channels = 100
 
 
   # TRAIN
 
-  ddiffuseNet, dspecularNet, dlDiff, dlSpec, dlFinal = train_dpcn(dataset, L, n_kernels, kernel_size, input_channels, hidden_channels)
-  # plot_training(dlDiff, dlSpec, 'ddiffuse')
+  ddiffuseNet, dspecularNet, dlDiff, dlSpec, dlFinal = train_dpcn(dataset, L, n_kernels, kernel_size, input_channels, hidden_channels, valDataset=valDataset)
+  plot_training(dlDiff, dlSpec, 'ddiffuse')
   # kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal = train_kpcn(dataset, L, n_kernels, kernel_size, input_channels, hidden_channels)
 
   # feat_ddiffuseNet, feat_dspecularNet, feat_dlDiff, feat_dlSpec, feat_dlFinal = train_feat_dpcn(dataset, L, n_kernels, kernel_size, input_channels, hidden_channels, recon_kernel_size)

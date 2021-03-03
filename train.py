@@ -21,10 +21,53 @@ hidden_channels = 100
 
 permutation = [0, 3, 1, 2]
 eps = 0.00316
-def train(dataset, input_channels, device, feat=False,mode='KPCN', epochs=20, learning_rate=1e-4, show_images=False):
-#   dataset = KPCNDataset()
+
+def validation(diffuseNet, specularNet, dataloader, criterion, device, mode='KPCN'):
+  pass
+  lossDiff = 0
+  lossSpec = 0
+  lossFinal = 0
+  for batch_idx, data in enumerate(dataloader):
+    X_diff = data['X_diff'].permute(permutation).to(device)
+    Y_diff = data['Reference'][:,:,:,:3].permute(permutation).to(device)
+
+    outputDiff = diffuseNet(X_diff)
+    if mode == 'KPCN':
+      X_input = crop_like(X_diff, outputDiff)
+      outputDiff = apply_kernel(outputDiff, X_input, device)
+
+    Y_diff = crop_like(Y_diff, outputDiff)
+    lossDiff += criterion(outputDiff, Y_diff).item()
+
+    X_spec = data['X_spec'].permute(permutation).to(device)
+    Y_spec = data['Reference'][:,:,:,3:6].permute(permutation).to(device)
+    
+    outputSpec = specularNet(X_spec)
+    if mode == 'KPCN':
+      X_input = crop_like(X_spec, outputSpec)
+      outputSpec = apply_kernel(outputSpec, X_input, device)
+
+    Y_spec = crop_like(Y_spec, outputSpec)
+    lossSpec += criterion(outputSpec, Y_spec).item()
+
+    # calculate final ground truth error
+    albedo = data['origAlbedo'].permute(permutation).to(device)
+    albedo = crop_like(albedo, outputDiff)
+    outputFinal = outputDiff * (albedo + eps) + torch.exp(outputSpec) - 1.0
+
+    Y_final = data['finalGt'].permute(permutation).to(device)
+    Y_final = crop_like(Y_final, outputFinal)
+    lossFinal += criterion(outputFinal, Y_final).item()
+
+  return lossDiff/len(dataloader), lossSpec/len(dataloader), lossFinal/len(dataloader)
+
+def train(dataset, input_channels, device, feat=False, validDataSet=None, mode='KPCN', epochs=20, learning_rate=1e-4, show_images=False):
+  print('TRAINING WITH VALIDDATASET : {}'.format(validDataSet))
   dataloader = torch.utils.data.DataLoader(dataset, batch_size=4,
                           shuffle=True, num_workers=4)
+
+  if validDataSet is not None:
+    validDataloader = torch.utils.data.DataLoader(validDataSet, batch_size=4, num_workers=4)
 
   # instantiate networks
   if feat:
@@ -49,8 +92,12 @@ def train(dataset, input_channels, device, feat=False,mode='KPCN', epochs=20, le
   lDiff = []
   lSpec = []
   lFinal = []
+  valLDiff = []
+  valLSpec = []
+  valLFinal = []
 
   writer = SummaryWriter('runs/'+mode)
+  total_epoch = 0
 
 
   import time
@@ -109,17 +156,17 @@ def train(dataset, input_channels, device, feat=False,mode='KPCN', epochs=20, le
         albedo = crop_like(albedo, outputDiff)
         outputFinal = outputDiff * (albedo + eps) + torch.exp(outputSpec) - 1.0
 
-        if False:#i_batch % 500:
-          print("Sample, denoised, gt")
-          sz = 3
-          orig = crop_like(sample_batched['finalInput'].permute(permutation), outputFinal)
-          orig = orig.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
-          show_data(orig, figsize=(sz,sz), normalize=True)
-          img = outputFinal.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
-          show_data(img, figsize=(sz,sz), normalize=True)
-          gt = crop_like(sample_batched['finalGt'].permute(permutation), outputFinal)
-          gt = gt.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
-          show_data(gt, figsize=(sz,sz), normalize=True)
+        # if False:#i_batch % 500:
+        #   print("Sample, denoised, gt")
+        #   sz = 3
+        #   orig = crop_like(sample_batched['finalInput'].permute(permutation), outputFinal)
+        #   orig = orig.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
+        #   show_data(orig, figsize=(sz,sz), normalize=True)
+        #   img = outputFinal.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
+        #   show_data(img, figsize=(sz,sz), normalize=True)
+        #   gt = crop_like(sample_batched['finalGt'].permute(permutation), outputFinal)
+        #   gt = gt.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
+        #   show_data(gt, figsize=(sz,sz), normalize=True)
 
         Y_final = sample_batched['finalGt'].permute(permutation).to(device)
 
@@ -135,22 +182,39 @@ def train(dataset, input_channels, device, feat=False,mode='KPCN', epochs=20, le
       writer.add_scalar('total loss', accuLossFinal if accuLossFinal != float('inf') else 0, epoch * len(dataloader) + i_batch)
       writer.add_scalar('diffuse loss', accuLossDiff if accuLossDiff != float('inf') else 0, epoch * len(dataloader) + i_batch)
       writer.add_scalar('specular loss', accuLossSpec if accuLossSpec != float('inf') else 0, epoch * len(dataloader) + i_batch)
+      
+    print('VALIDATION WORKING!')
+    validLossDiff, validLossSpec, validLossFinal = validation(diffuseNet, specularNet, validDataloader, criterion, device, mode)
+    writer.add_scalar('Valid total loss', validLossFinal if accuLossFinal != float('inf') else 0, epoch * len(dataloader) + i_batch)
+    writer.add_scalar('Valid diffuse loss', validLossDiff if accuLossDiff != float('inf') else 0, epoch * len(dataloader) + i_batch)
+    writer.add_scalar('Valid specular loss', validLossSpec if accuLossSpec != float('inf') else 0, epoch * len(dataloader) + i_batch)
 
     print("Epoch {}".format(epoch + 1))
     print("LossDiff: {}".format(accuLossDiff))
     print("LossSpec: {}".format(accuLossSpec))
     print("LossFinal: {}".format(accuLossFinal))
+    print("ValidLossDiff: {}".format(validLossDiff))
+    print("ValidLossSpec: {}".format(validLossSpec))
+    print("ValidLossFinal: {}".format(validLossFinal))
 
     lDiff.append(accuLossDiff)
     lSpec.append(accuLossSpec)
     lFinal.append(accuLossFinal)
+    valLDiff.append(validLossDiff)
+    valLSpec.append(validLossSpec)
+    valLFinal.append(validLossFinal)
+
+    total_epoch += 1
+    if valLFinal[-1] >= valLFinal[-2]:
+      print('EARLY STOPPING!')
+      break
     
     accuLossDiff = 0
     accuLossSpec = 0
     accuLossFinal = 0
 
   writer.close()
-  print('Finished training in mode', mode)
+  print('Finished training in mode, {} with epoch {}'.format(mode, total_epoch))
   print('Took', time.time() - start, 'seconds.')
   
   return diffuseNet, specularNet, lDiff, lSpec, lFinal
