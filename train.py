@@ -8,9 +8,11 @@ import torch.optim as optim
 import matplotlib.pyplot as plt
 # from torch.utils.tensorboard import SummaryWriter
 from tensorboardX import SummaryWriter
+import numpy as np
 
 from utils import *
 from model import *
+from visualize import *
 
 L = 9 # number of convolutional layers
 n_kernels = 100 # number of kernels in each layer
@@ -96,7 +98,7 @@ def train(dataset, input_channels, device, feat=False, validDataSet=None, mode='
   valLSpec = []
   valLFinal = []
 
-  writer = SummaryWriter('runs/'+mode)
+  writer = SummaryWriter('runs/'+mode+'_2')
   total_epoch = 0
 
 
@@ -185,7 +187,7 @@ def train(dataset, input_channels, device, feat=False, validDataSet=None, mode='
       
     print('VALIDATION WORKING!')
     validLossDiff, validLossSpec, validLossFinal = validation(diffuseNet, specularNet, validDataloader, criterion, device, mode)
-    writer.add_scalar('Valid total loss', validLossFinal if accuLossFinal != float('inf') else 0, epoch * len(dataloader) + i_batch)
+    writer.add_scalar('Valid total loss', np.log(np.abs(validLossFinal)) if accuLossFinal != float('inf') else 0, epoch * len(dataloader) + i_batch)
     writer.add_scalar('Valid diffuse loss', validLossDiff if accuLossDiff != float('inf') else 0, epoch * len(dataloader) + i_batch)
     writer.add_scalar('Valid specular loss', validLossSpec if accuLossSpec != float('inf') else 0, epoch * len(dataloader) + i_batch)
 
@@ -205,9 +207,9 @@ def train(dataset, input_channels, device, feat=False, validDataSet=None, mode='
     valLFinal.append(validLossFinal)
 
     total_epoch += 1
-    if valLFinal[-1] >= valLFinal[-2]:
-      print('EARLY STOPPING!')
-      break
+    # if len(valLFinal) > 10 and valLFinal[-1] >= valLFinal[-2]:
+    #   print('EARLY STOPPING!')
+    #   break
     
     accuLossDiff = 0
     accuLossSpec = 0
@@ -279,17 +281,22 @@ def denoise(diffuseNet, specularNet, data, device, debug=False):
     albedo = crop_like(albedo, outputDiff)
     outputFinal = outputDiff * (albedo + eps) + torch.exp(outputSpec) - 1.0
 
-    # if True:
-    #   print("Sample, denoised, gt")
-    #   sz = 15
-    #   orig = crop_like(data['finalInput'].permute(permutation), outputFinal)
-    #   orig = orig.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
-    #   show_data(orig, figsize=(sz,sz), normalize=True)
-    #   img = outputFinal.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
-    #   show_data(img, figsize=(sz,sz), normalize=True)
-    #   gt = crop_like(data['finalGt'].permute(permutation), outputFinal)
-    #   gt = gt.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
-    #   show_data(gt, figsize=(sz,sz), normalize=True)
+    if debug:
+      writer = SummaryWriter('runs/results_'+mode)
+      print("Sample, denoised, gt")
+      sz = 15
+      orig = crop_like(data['finalInput'].permute(permutation), outputFinal)
+      orig = orig.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
+      show_data(orig, figsize=(sz,sz), normalize=True)
+      print(orig.shape)
+      writer.add_image('noisy', np.transpose(orig, (1,2,0)))
+      img = outputFinal.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
+      show_data(img, figsize=(sz,sz), normalize=True)
+      writer.add_image('denoised', img)
+      gt = crop_like(data['finalGt'].permute(permutation), outputFinal)
+      gt = gt.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
+      show_data(gt, figsize=(sz,sz), normalize=True)
+      writer.add_image('clean', img)
 
     Y_final = data['finalGt'].permute(permutation).to(device)
 
