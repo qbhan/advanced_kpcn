@@ -1,6 +1,7 @@
 import torch
 import sys
 import gc
+import matplotlib.pyplot as plt
 
 
 def to_torch_tensors(data):
@@ -52,3 +53,15 @@ def getsize(obj):
         marked.update(new_refr.keys())
 
     return sz
+
+def plot_training(diff, spec, filename):
+  pass
+  plt.plot(diff, 'r', label="Diffuse")
+  plt.plot(spec, 'b', label="Specular")
+  plt.title(filename)
+  plt.xlim([0, 40])
+  plt.xlabel('Loss')
+  plt.ylabel('Epoch')
+  plt.legend()
+  plt.savefig(filename + '.jpg')
+  plt.show()
