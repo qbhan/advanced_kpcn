@@ -40,9 +40,10 @@ num_layer : number of layers / depth of models
 '''
 parser.add_argument('--device', default='cuda:0')
 parser.add_argument('--mode', default='kpcn')
+parser.add_argument('--num_layers', default=9, type=int)
 parser.add_argument('--input_channels', default=28, type=int)
 parser.add_argument('--hidden_channels', default=100, type=int)
-parser.add_argument('--num_layers', default=9, type=int)
+parser.add_argument('--kernel_size', default=5, type=int)
 
 '''
 2. Preprocessing specifications
@@ -68,12 +69,6 @@ parser.add_argument('--lr', default=1e-4, type=float)
 parser.add_argument('--epochs', default=20, type=int)
 parser.add_argument('--loss', default='L1')
 
-'''
-4. More specifications
-kernel_size : for kpcn
-feat: add soon
-'''
-parser.add_argument('--kernel_size', default=5, type=int)
 
 
 
@@ -118,7 +113,7 @@ def validation(diffuseNet, specularNet, dataloader, eps, criterion, device, mode
 
   return lossDiff/len(dataloader), lossSpec/len(dataloader), lossFinal/len(dataloader)
 
-def train(mode, device, trainset, validset, eps, L, input_channels, hidden_channels, kernel_size, epochs, learning_rate, loss, do_early_stopping=False, show_images=False):
+def train(mode, device, trainset, validset, eps, L, input_channels, hidden_channels, kernel_size, epochs, learning_rate, loss, do_early_stopping, show_images=False):
   # print('TRAINING WITH VALIDDATASET : {}'.format(validset))
   dataloader = torch.utils.data.DataLoader(trainset, batch_size=4,
                           shuffle=True, num_workers=4)
@@ -305,7 +300,7 @@ def load_dataset(device, val=False):
   return dataset
 
 
-def train_dpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channels, hidden_channels, epochs, lr, loss, do_early_stopping=False, save_dir=None):
+def train_dpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channels, hidden_channels, epochs, lr, loss, do_early_stopping, save_dir=None):
   pass
   ddiffuseNet, dspecularNet, dlDiff, dlSpec, dlFinal = train('dpcn', device, dataset, validset, eps, n_layers, in_channels, hidden_channels, size_kernel, epochs, lr, loss, do_early_stopping)
   torch.save(ddiffuseNet.state_dict(), 'trained_model/ddiffuseNet.pt')
@@ -319,7 +314,7 @@ def train_dpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channel
 
 
 
-def train_kpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channels, hidden_channels, epochs, lr, loss, save_dir=None):
+def train_kpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channels, hidden_channels, epochs, lr, loss, do_early_stopping, save_dir=None):
   pass
   kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal = train('kpcn', device, dataset, validset, eps, n_layers, in_channels, hidden_channels, size_kernel, epochs, lr, loss)
   torch.save(kdiffuseNet.state_dict(), 'trained_model/kdiffuseNet.pt')
@@ -332,7 +327,7 @@ def train_kpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channel
   return kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal
 
 
-def train_feat_dpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channels, hidden_channels, epochs, lr, loss, save_dir=None):
+def train_feat_dpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channels, hidden_channels, epochs, lr, loss, do_early_stopping, save_dir=None):
   pass
   ddiffuseNet, dspecularNet, dlDiff, dlSpec, dlFinal = train('feat_dpcn', device, dataset, validset, eps, n_layers, in_channels, hidden_channels, size_kernel, epochs, lr, loss)
   torch.save(ddiffuseNet.state_dict(), 'trained_model/feat_ddiffuseNet.pt')
@@ -345,7 +340,7 @@ def train_feat_dpcn(dataset, validset, device, eps, n_layers, size_kernel, in_ch
   return ddiffuseNet, dspecularNet, dlDiff, dlSpec, dlFinal
 
 
-def train_feat_kpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channels, hidden_channels, epochs, lr, loss, save_dir=None):
+def train_feat_kpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channels, hidden_channels, epochs, lr, loss, do_early_stopping, save_dir=None):
   pass
   kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal = train('feat_kpcn', device, dataset, validset, eps, n_layers, in_channels, hidden_channels, size_kernel, epochs, lr, loss)
   torch.save(kdiffuseNet.state_dict(), 'trained_model/feat_kdiffuseNet.pt')
@@ -376,19 +371,19 @@ def main():
 
   if args.mode == 'dpcn':
     pass
-    diffuseNet, specularNet, Diff, Spec, Final = train_dpcn(trainset, validset, args.device, args.eps, args.num_layers, args.kernel_size, input_channels, args.hidden_channels, args.epochs, args.lr, args.loss)
+    diffuseNet, specularNet, Diff, Spec, Final = train_dpcn(trainset, validset, args.device, args.eps, args.num_layers, args.kernel_size, input_channels, args.hidden_channels, args.epochs, args.lr, args.loss, args.do_early_stopping)
 
   elif args.mode == 'kpcn':
     pass
-    diffuseNet, specularNet, Diff, Spec, Final = train_kpcn(trainset, validset, args.device, args.eps, args.num_layers, args.kernel_size, input_channels, args.hidden_channels, args.epochs, args.lr, args.loss)
+    diffuseNet, specularNet, Diff, Spec, Final = train_kpcn(trainset, validset, args.device, args.eps, args.num_layers, args.kernel_size, input_channels, args.hidden_channels, args.epochs, args.lr, args.loss, args.do_early_stopping)
 
   elif args.mode == 'feat_dpcn':
     pass
-    diffuseNet, specularNet, Diff, Spec, Final = train_feat_dpcn(trainset, validset, args.device, args.eps, args.num_layers, args.kernel_size, input_channels, args.hidden_channels, args.epochs, args.lr, args.loss)
+    diffuseNet, specularNet, Diff, Spec, Final = train_feat_dpcn(trainset, validset, args.device, args.eps, args.num_layers, args.kernel_size, input_channels, args.hidden_channels, args.epochs, args.lr, args.los, args.do_early_stoppings)
 
   elif args.mode == 'feat_kpcn':
     pass
-    diffuseNet, specularNet, Diff, Spec, Final = train_feat_kpcn(trainset, validset, args.device, args.eps, args.num_layers, args.kernel_size, input_channels, args.hidden_channels, args.epochs, args.lr, args.loss)
+    diffuseNet, specularNet, Diff, Spec, Final = train_feat_kpcn(trainset, validset, args.device, args.eps, args.num_layers, args.kernel_size, input_channels, args.hidden_channels, args.epochs, args.lr, args.loss, args.do_early_stopping)
 
   else:
     assert(False)
