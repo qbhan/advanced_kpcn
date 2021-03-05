@@ -27,51 +27,51 @@ from train import *
 from model import *
 
 
-def image_preprocess(patch_size, n_patches, val=False):
-  cropped = []
-  if not val:
-    cropped += get_cropped_patches("sample_data/sample.exr", "sample_data/gt.exr", patch_size, n_patches)
-    for f in glob.glob('sample_data/sample*.exr'):
+# def image_preprocess(patch_size, n_patches, val=False):
+#   cropped = []
+#   if not val:
+#     cropped += get_cropped_patches("sample_data/sample.exr", "sample_data/gt.exr", patch_size, n_patches)
+#     for f in glob.glob('sample_data/sample*.exr'):
 
-      if f == 'sample_data\sample.exr': continue
+#       if f == 'sample_data\sample.exr': continue
 
-      num = f[len('sample_data/sample'):f.index('.')]
-      sample_name = 'sample_data/sample{}.exr'.format(num)
-      gt_name = 'sample_data/gt{}.exr'.format(num)
-      print(sample_name, gt_name)
-      cropped += get_cropped_patches(sample_name, gt_name, patch_size, n_patches)
+#       num = f[len('sample_data/sample'):f.index('.')]
+#       sample_name = 'sample_data/sample{}.exr'.format(num)
+#       gt_name = 'sample_data/gt{}.exr'.format(num)
+#       print(sample_name, gt_name)
+#       cropped += get_cropped_patches(sample_name, gt_name, patch_size, n_patches)
 
-    print('Patches cropped : ' + str(len(cropped)))
-    print('Saving patches')
-    # save the training data
-    for i, v in enumerate(cropped):
-      torch.save(v, 'data/sample'+str(i+1)+'.pt')
-      # print('SAVED data/sample'+str(i+1)+'.pt')
-  else:
-    for f in glob.glob('sample_data/evalref*.exr'):
-      print(f)
-      if f == 'sample_data\evalref1.exr': 
-        print('RESERVE FOR TEST')
-        continue
+#     print('Patches cropped : ' + str(len(cropped)))
+#     print('Saving patches')
+#     # save the training data
+#     for i, v in enumerate(cropped):
+#       torch.save(v, 'data/sample'+str(i+1)+'.pt')
+#       # print('SAVED data/sample'+str(i+1)+'.pt')
+#   else:
+#     for f in glob.glob('sample_data/evalref*.exr'):
+#       print(f)
+#       if f == 'sample_data\evalref1.exr': 
+#         print('RESERVE FOR TEST')
+#         continue
 
-      num = f[len('sample_data/evalref'):f.index('.')]
-      sample_name = 'sample_data/eval{}.exr'.format(num)
-      gt_name = 'sample_data/evalref{}.exr'.format(num)
-      print(sample_name, gt_name)
-      cropped += get_cropped_patches(sample_name, gt_name, patch_size, n_patches)
+#       num = f[len('sample_data/evalref'):f.index('.')]
+#       sample_name = 'sample_data/eval{}.exr'.format(num)
+#       gt_name = 'sample_data/evalref{}.exr'.format(num)
+#       print(sample_name, gt_name)
+#       cropped += get_cropped_patches(sample_name, gt_name, patch_size, n_patches)
 
-    print('Patches cropped : ' + str(len(cropped)))
-    print('Saving patches')
-    # save the training data
-    for i, v in enumerate(cropped):
-      torch.save(v, 'val/eval'+str(i+1)+'.pt')
-      # print('SAVED data/sample'+str(i+1)+'.pt')
+#     print('Patches cropped : ' + str(len(cropped)))
+#     print('Saving patches')
+#     # save the training data
+#     for i, v in enumerate(cropped):
+#       torch.save(v, 'val/eval'+str(i+1)+'.pt')
+#       # print('SAVED data/sample'+str(i+1)+'.pt')
 
-  # Check sizes of data
-  for k, v in cropped[0].items():
-    print(k, getsize(v))
+#   # Check sizes of data
+#   for k, v in cropped[0].items():
+#     print(k, getsize(v))
     
-  print(getsize(cropped) / 1024 / 1024, "MiB")
+#   print(getsize(cropped) / 1024 / 1024, "MiB")
 
 
 def load_dataset(device, val=False):
@@ -147,14 +147,14 @@ def train_feat_kpcn(dataset, n_layers, n_kernels, size_kernel, in_channels, hidd
   return kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal
 
 
-def test_model(diffuseNet, specularNet, device, data=None):
-  pass
-  diffuseNet.to(device)
-  specularNet.to(device)
-  if not data:
-    eval_data = preprocess_input("sample_data/eval1.exr", "sample_data/evalref1.exr")
-    eval_data = crop(eval_data, (1280//2, 720//2), 300)
-  denoise(diffuseNet, specularNet, eval_data, device)
+# def test_model(diffuseNet, specularNet, device, data=None):
+#   pass
+#   diffuseNet.to(device)
+#   specularNet.to(device)
+#   if not data:
+#     eval_data = preprocess_input("sample_data/eval1.exr", "sample_data/evalref1.exr")
+#     eval_data = crop(eval_data, (1280//2, 720//2), 300)
+#   denoise(diffuseNet, specularNet, eval_data, device)
 
 if __name__ == '__main__':
 
@@ -173,8 +173,8 @@ if __name__ == '__main__':
   n_patches = 400
   eps = 0.00316
 
-  # image_preprocess(patch_size, n_patches)
-  # image_preprocess(patch_size, n_patches, val=True)
+  image_preprocess(patch_size, n_patches)
+  image_preprocess(patch_size, n_patches, val=True)
   dataset = load_dataset(device)
   valDataset = load_dataset(device, val=True)
 
@@ -188,7 +188,8 @@ if __name__ == '__main__':
 
   ddiffuseNet, dspecularNet, dlDiff, dlSpec, dlFinal = train_dpcn(dataset, L, n_kernels, kernel_size, input_channels, hidden_channels, valDataset=valDataset)
   plot_training(dlDiff, dlSpec, 'ddiffuse')
-  # kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal = train_kpcn(dataset, L, n_kernels, kernel_size, input_channels, hidden_channels)
+  kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal = train_kpcn(dataset, L, n_kernels, kernel_size, input_channels, hidden_channels)
+  plot_training(dlDiff, dlSpec, 'ddiffuse')
 
   # feat_ddiffuseNet, feat_dspecularNet, feat_dlDiff, feat_dlSpec, feat_dlFinal = train_feat_dpcn(dataset, L, n_kernels, kernel_size, input_channels, hidden_channels, recon_kernel_size)
   # feat_kdiffuseNet, feat_kspecularNet, feat_klDiff, feat_klSpec, feat_klFinal = train_feat_kpcn(dataset, L, n_kernels, kernel_size, input_channels, hidden_channels, recon_kernel_size)
