@@ -1,6 +1,12 @@
+import argparse
+import glob
+
 import numpy as np
 import pyexr
-# import OpenEXR
+import torch
+
+from generate_patch import *
+from utils import *
 
 # patch_size = 64 # patches are 64x64
 # n_patches = 400
@@ -172,3 +178,67 @@ def preprocess_input(filename, gt, debug=False):
                         'normalVariance', 'depth', 'visibility'))
   
   return data
+
+
+def image_preprocess(patch_size, n_patches, val=False):
+  cropped = []
+  if not val:
+    cropped += get_cropped_patches("sample_data/sample.exr", "sample_data/gt.exr", patch_size, n_patches)
+    for f in glob.glob('sample_data/sample*.exr'):
+
+      if f == 'sample_data\sample.exr': continue
+
+      num = f[len('sample_data/sample'):f.index('.')]
+      sample_name = 'sample_data/sample{}.exr'.format(num)
+      gt_name = 'sample_data/gt{}.exr'.format(num)
+      print(sample_name, gt_name)
+      cropped += get_cropped_patches(sample_name, gt_name, patch_size, n_patches)
+
+    print('Patches cropped : ' + str(len(cropped)))
+    print('Saving patches')
+    # save the training data
+    for i, v in enumerate(cropped):
+      torch.save(v, 'data/sample'+str(i+1)+'.pt')
+      # print('SAVED data/sample'+str(i+1)+'.pt')
+  else:
+    for f in glob.glob('sample_data/evalref*.exr'):
+      print(f)
+      if f == 'sample_data\evalref1.exr': 
+        print('RESERVE FOR TEST')
+        continue
+
+      num = f[len('sample_data/evalref'):f.index('.')]
+      sample_name = 'sample_data/eval{}.exr'.format(num)
+      gt_name = 'sample_data/evalref{}.exr'.format(num)
+      print(sample_name, gt_name)
+      cropped += get_cropped_patches(sample_name, gt_name, patch_size, n_patches)
+
+    print('Patches cropped : ' + str(len(cropped)))
+    print('Saving patches')
+    # save the training data
+    for i, v in enumerate(cropped):
+      torch.save(v, 'val/eval'+str(i+1)+'.pt')
+      # print('SAVED data/sample'+str(i+1)+'.pt')
+
+  # Check sizes of data
+  for k, v in cropped[0].items():
+    print(k, getsize(v))
+    
+  print(getsize(cropped) / 1024 / 1024, "MiB")
+
+parser = argparse.ArgumentParser(description='Preprocess Scenes')
+
+parser.add_argument('--patch-size', default=64, type=int, metavar='patch_size')
+parser.add_argument('--n-patches', default=400, type=int, metavar='n_patches')
+parser.add_argument('--val', dest='val', action='store_true')
+parser.set_defaults(val=False)
+
+def main():
+  pass
+  args = parser.parse_args()
+  print(args.patch_size, args.n_patches, args.val)
+  image_preprocess(args.patch_size, args.n_patches, args.val)
+
+
+if __name__ == '__main__':
+  main()
