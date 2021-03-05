@@ -64,4 +64,4 @@ def plot_training(diff, spec, filename):
   plt.ylabel('Epoch')
   plt.legend()
   plt.savefig(filename + '.jpg')
-  plt.show()
+  # plt.show()
