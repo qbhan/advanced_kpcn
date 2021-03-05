@@ -228,8 +228,8 @@ def image_preprocess(patch_size, n_patches, val=False):
 
 parser = argparse.ArgumentParser(description='Preprocess Scenes')
 
-parser.add_argument('--patch-size', default=64, type=int, metavar='patch_size')
-parser.add_argument('--n-patches', default=400, type=int, metavar='n_patches')
+parser.add_argument('--patch_size', default=64, type=int)
+parser.add_argument('--n_patches', default=400, type=int)
 parser.add_argument('--val', dest='val', action='store_true')
 parser.set_defaults(val=False)
 
