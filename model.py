@@ -25,7 +25,7 @@ def make_net(n_layers, input_channels, hidden_channels, kernel_size, mode):
     params = sum(p.numel() for p in layers[-2].parameters() if p.requires_grad)
     print("Params : {}".format(params))
     
-  out_channels = 3 if mode == 'DPCN' else recon_kernel_size**2
+  out_channels = 3 if 'dpcn' in mode else recon_kernel_size**2
   layers += [nn.Conv2d(hidden_channels, out_channels, kernel_size)]#, padding=18)]
   
   for layer in layers:
@@ -53,7 +53,7 @@ def make_feat_net(n_layers, input_channels, hidden_channels, kernel_size, mode):
     params = sum(p.numel() for p in layers[-2].parameters() if p.requires_grad)
     print("Params : {}".format(params))
     
-  out_channels = 3 if mode == 'DPCN' else recon_kernel_size**2
+  out_channels = 3 if 'dpcn' in mode else recon_kernel_size**2
   layers += [nn.Conv2d(hidden_channels, out_channels, kernel_size)]#, padding=18)]
   
   for layer in layers:
