@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as transforms
 import torch.optim as optim
+from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 
 import matplotlib.pyplot as plt
@@ -11,11 +12,12 @@ import os
 import numpy as np
 import argparse
 import csv
+from tqdm import tqdm
 
 from utils import *
 from model import *
 from visualize import *
-from dataset import *
+from dataset import KPCNDataset, MSDenoiseDataset, init_data
 
 # L = 9 # number of convolutional layers
 # n_kernels = 100 # number of kernels in each layer
@@ -25,7 +27,7 @@ from dataset import *
 # hidden_channels = 100
 
 permutation = [0, 3, 1, 2]
-# eps = 0.00316
+eps = 0.00316
 
 parser = argparse.ArgumentParser(description='Train the model')
 
@@ -65,6 +67,8 @@ parser.set_defaults(do_val=False)
 parser.add_argument('--do_val', dest='do_val', action='store_true')
 parser.set_defaults(do_early_stopping=False)
 parser.add_argument('--do_early_stopping', dest='do_early_stopping', action='store_true')
+parser.add_argument('--data_dir')
+parser.add_argument('--batch_size', default=8, type=int)
 parser.add_argument('--lr', default=1e-4, type=float)
 parser.add_argument('--epochs', default=20, type=int)
 parser.add_argument('--loss', default='L1')
@@ -78,8 +82,8 @@ def validation(diffuseNet, specularNet, dataloader, eps, criterion, device, mode
   lossSpec = 0
   lossFinal = 0
   for batch_idx, data in enumerate(dataloader):
-    X_diff = data['X_diff'].permute(permutation).to(device)
-    Y_diff = data['Reference'][:,:,:,:3].permute(permutation).to(device)
+    X_diff = data['kpcn_diffuse_in'].to(device)
+    Y_diff = data['target_diffuse'].to(device)
 
     outputDiff = diffuseNet(X_diff)
     # if mode == 'KPCN':
@@ -90,8 +94,8 @@ def validation(diffuseNet, specularNet, dataloader, eps, criterion, device, mode
     Y_diff = crop_like(Y_diff, outputDiff)
     lossDiff += criterion(outputDiff, Y_diff).item()
 
-    X_spec = data['X_spec'].permute(permutation).to(device)
-    Y_spec = data['Reference'][:,:,:,3:6].permute(permutation).to(device)
+    X_spec = data['kpcn_specular_in'].to(device)
+    Y_spec = data['target_specular'].to(device)
     
     outputSpec = specularNet(X_spec)
     # if mode == 'KPCN':
@@ -103,11 +107,11 @@ def validation(diffuseNet, specularNet, dataloader, eps, criterion, device, mode
     lossSpec += criterion(outputSpec, Y_spec).item()
 
     # calculate final ground truth error
-    albedo = data['origAlbedo'].permute(permutation).to(device)
+    albedo = data['kpcn_albedo'].to(device)
     albedo = crop_like(albedo, outputDiff)
     outputFinal = outputDiff * (albedo + eps) + torch.exp(outputSpec) - 1.0
 
-    Y_final = data['finalGt'].permute(permutation).to(device)
+    Y_final = data['target_total'].to(device)
     Y_final = crop_like(Y_final, outputFinal)
     lossFinal += criterion(outputFinal, Y_final).item()
 
@@ -115,11 +119,11 @@ def validation(diffuseNet, specularNet, dataloader, eps, criterion, device, mode
 
 def train(mode, device, trainset, validset, eps, L, input_channels, hidden_channels, kernel_size, epochs, learning_rate, loss, do_early_stopping, show_images=False):
   # print('TRAINING WITH VALIDDATASET : {}'.format(validset))
-  dataloader = torch.utils.data.DataLoader(trainset, batch_size=4,
-                          shuffle=True, num_workers=4)
+  dataloader = DataLoader(trainset, batch_size=8, num_workers=1, pin_memory=False)
+  print(len(dataloader))
 
   if validset is not None:
-    validDataloader = torch.utils.data.DataLoader(validset, batch_size=4, num_workers=4)
+    validDataloader = DataLoader(validset, batch_size=8, num_workers=1, pin_memory=False)
 
   # instantiate networks
   print(L, input_channels, hidden_channels, kernel_size, mode)
@@ -161,14 +165,26 @@ def train(mode, device, trainset, validset, eps, L, input_channels, hidden_chann
   import time
 
   start = time.time()
+  print('START')
+
+  print(len(dataloader))
+  # for sample_batched in tqdm(dataloader, leave=False, ncols=70):
+  #     # i_batch += 1
+  #     print(sample_batched.keys())
+  #     print('KPCN_DIFFUSE_IN : {}'.format(sample_batched['kpcn_diffuse_in'].shape))
+  #     print('KPCN_DIFFUSE_BUFFER : {}'.format(sample_batched['kpcn_diffuse_buffer'].shape))
 
   for epoch in range(epochs):
-    for i_batch, sample_batched in enumerate(dataloader):
-      #print(i_batch)
+    # for i_batch, sample_batched in enumerate(dataloader):
+    i_batch = -1
+    for sample_batched in tqdm(dataloader, leave=False, ncols=70):
+      i_batch += 1
+      # print(sample_batched.keys())
 
       # get the inputs
-      X_diff = sample_batched['X_diff'].permute(permutation).to(device)
-      Y_diff = sample_batched['Reference'][:,:,:,:3].permute(permutation).to(device)
+      X_diff = sample_batched['kpcn_diffuse_in'].to(device)
+
+      Y_diff = sample_batched['target_diffuse'].to(device)
       # print(X_diff.shape, Y_diff.shape)
       # zero the parameter gradients
       optimizerDiff.zero_grad()
@@ -191,8 +207,8 @@ def train(mode, device, trainset, validset, eps, L, input_channels, hidden_chann
       optimizerDiff.step()
 
       # get the inputs
-      X_spec = sample_batched['X_spec'].permute(permutation).to(device)
-      Y_spec = sample_batched['Reference'][:,:,:,3:6].permute(permutation).to(device)
+      X_spec = sample_batched['kpcn_specular_in'].to(device)
+      Y_spec = sample_batched['target_specular'].to(device)
 
       # zero the parameter gradients
       optimizerSpec.zero_grad()
@@ -213,7 +229,8 @@ def train(mode, device, trainset, validset, eps, L, input_channels, hidden_chann
 
       # calculate final ground truth error
       with torch.no_grad():
-        albedo = sample_batched['origAlbedo'].permute(permutation).to(device)
+        # albedo = sample_batched['origAlbedo'].permute(permutation).to(device)
+        albedo = sample_batched['kpcn_albedo'].to(device)
         albedo = crop_like(albedo, outputDiff)
         outputFinal = outputDiff * (albedo + eps) + torch.exp(outputSpec) - 1.0
 
@@ -229,7 +246,7 @@ def train(mode, device, trainset, validset, eps, L, input_channels, hidden_chann
         #   gt = gt.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
         #   show_data(gt, figsize=(sz,sz), normalize=True)
 
-        Y_final = sample_batched['finalGt'].permute(permutation).to(device)
+        Y_final = sample_batched['target_total'].to(device)
 
         Y_final = crop_like(Y_final, outputFinal)
 
@@ -316,7 +333,7 @@ def train_dpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channel
 
 def train_kpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channels, hidden_channels, epochs, lr, loss, do_early_stopping, save_dir=None):
   pass
-  kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal = train('kpcn', device, dataset, validset, eps, n_layers, in_channels, hidden_channels, size_kernel, epochs, lr, loss)
+  kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal = train('kpcn', device, dataset, validset, eps, n_layers, in_channels, hidden_channels, size_kernel, epochs, lr, loss, do_early_stopping)
   torch.save(kdiffuseNet.state_dict(), 'trained_model/kdiffuseNet.pt')
   torch.save(kspecularNet.state_dict(), 'trained_model/kspecularNet.pt')
   with open('plot/kpcn.csv', 'w', newline='') as f:
@@ -329,7 +346,7 @@ def train_kpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channel
 
 def train_feat_dpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channels, hidden_channels, epochs, lr, loss, do_early_stopping, save_dir=None):
   pass
-  ddiffuseNet, dspecularNet, dlDiff, dlSpec, dlFinal = train('feat_dpcn', device, dataset, validset, eps, n_layers, in_channels, hidden_channels, size_kernel, epochs, lr, loss)
+  ddiffuseNet, dspecularNet, dlDiff, dlSpec, dlFinal = train('feat_dpcn', device, dataset, validset, eps, n_layers, in_channels, hidden_channels, size_kernel, epochs, lr, loss, do_early_stopping)
   torch.save(ddiffuseNet.state_dict(), 'trained_model/feat_ddiffuseNet.pt')
   torch.save(dspecularNet.state_dict(), 'trained_model/feat_dspecularNet.pt')
   with open('plot/feat_dpcn.csv', 'w', newline='') as f:
@@ -342,7 +359,7 @@ def train_feat_dpcn(dataset, validset, device, eps, n_layers, size_kernel, in_ch
 
 def train_feat_kpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channels, hidden_channels, epochs, lr, loss, do_early_stopping, save_dir=None):
   pass
-  kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal = train('feat_kpcn', device, dataset, validset, eps, n_layers, in_channels, hidden_channels, size_kernel, epochs, lr, loss)
+  kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal = train('feat_kpcn', device, dataset, validset, eps, n_layers, in_channels, hidden_channels, size_kernel, epochs, lr, loss, do_early_stopping)
   torch.save(kdiffuseNet.state_dict(), 'trained_model/feat_kdiffuseNet.pt')
   torch.save(kspecularNet.state_dict(), 'trained_model/feat_kspecularNet.pt')
   with open('plot/feat_kpcn.csv', 'w', newline='') as f:
@@ -358,14 +375,22 @@ def main():
   print(args)
   
   # Load Train & Validation Dataset
-  trainset = load_dataset(args.device)
-  validset = None
-  # print(args.do_val)
-  if args.do_val:
-    validset = load_dataset(args.device, args.do_val)
+  # trainset = load_dataset(args.device)
+  # validset = None
+  # # print(args.do_val)
+  # if args.do_val:
+  #   validset = load_dataset(args.device, args.do_val)
 
-  assert(trainset[0]['X_diff'].shape[-1] == validset[0]['X_diff'].shape[-1])
-  input_channels = trainset[0]['X_diff'].shape[-1]
+  dataset, dataloader = init_data(args)
+  print(len(dataset['train']), len(dataloader['train']))
+  # trainset, validset = dataloader['train'], dataloader['val']
+  trainset, validset = dataset['train'], dataset['val']
+  print(trainset, validset)
+
+  input_channels = dataset['train'].dncnn_in_size
+
+  # assert(trainset[0]['X_diff'].shape[-1] == validset[0]['X_diff'].shape[-1])
+  # input_channels = trainset[0]['X_diff'].shape[-1]
 
   diffuseNet, specularNet, Diff, Spec, Final = None, None, None, None, None
 
@@ -379,7 +404,7 @@ def main():
 
   elif args.mode == 'feat_dpcn':
     pass
-    diffuseNet, specularNet, Diff, Spec, Final = train_feat_dpcn(trainset, validset, args.device, args.eps, args.num_layers, args.kernel_size, input_channels, args.hidden_channels, args.epochs, args.lr, args.los, args.do_early_stoppings)
+    diffuseNet, specularNet, Diff, Spec, Final = train_feat_dpcn(trainset, validset, args.device, args.eps, args.num_layers, args.kernel_size, input_channels, args.hidden_channels, args.epochs, args.lr, args.loss, args.do_early_stopping)
 
   elif args.mode == 'feat_kpcn':
     pass
@@ -388,7 +413,7 @@ def main():
   else:
     assert(False)
 
-  # plot_training(Diff, Spec, args.mode)
+  plot_training(Diff, Spec, args.mode)
   
 
 

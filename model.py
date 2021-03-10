@@ -6,7 +6,12 @@ import torchvision.transforms as transforms
 
 recon_kernel_size = 21
 
+import itertools
+import visdom
+import os
+
 from basic_models import *
+from interface import KPCNInterface
 
 
 def make_net(n_layers, input_channels, hidden_channels, kernel_size, mode):
@@ -63,16 +68,16 @@ def make_feat_net(n_layers, input_channels, hidden_channels, kernel_size, mode):
   return nn.Sequential(*layers)
 
 
-def crop_like(data, like, debug=False):
-  if data.shape[-2:] != like.shape[-2:]:
-    # crop
-    with torch.no_grad():
-      dx, dy = data.shape[-2] - like.shape[-2], data.shape[-1] - like.shape[-1]
-      data = data[:,:,dx//2:-dx//2,dy//2:-dy//2]
-      if debug:
-        print(dx, dy)
-        print("After crop:", data.shape)
-  return data
+# def crop_like(data, like, debug=False):
+#   if data.shape[-2:] != like.shape[-2:]:
+#     # crop
+#     with torch.no_grad():
+#       dx, dy = data.shape[-2] - like.shape[-2], data.shape[-1] - like.shape[-1]
+#       data = data[:,:,dx//2:-dx//2,dy//2:-dy//2]
+#       if debug:
+#         print(dx, dy)
+#         print("After crop:", data.shape)
+#   return data
 
 
 
