@@ -83,8 +83,10 @@ def make_feat_net(n_layers, input_channels, hidden_channels, kernel_size, mode):
 
 
 def apply_kernel(weights, data, device):
+    # print('WEIGHTS: {}, DATA : {}'.format(weights.shape, data.shape))
     # apply softmax to kernel weights
-    weights = weights.permute((0, 2, 3, 1)).to(device)
+    # weights = weights.permute((0, 2, 3, 1)).to(device)
+    weights = weights.to(device)
     _, _, h, w = data.size()
     weights = F.softmax(weights, dim=3).view(-1, w * h, recon_kernel_size, recon_kernel_size)
 
@@ -134,5 +136,6 @@ def apply_kernel(weights, data, device):
     #print("Data:", data[0,:5,:,:])
     
     res = torch.cat((reds, greens, blues), dim=1).view(-1, 3, h, w).to(device)
+    # print(res.shape)
     
     return res
