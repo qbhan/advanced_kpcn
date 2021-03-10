@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as transforms
+import torchvision.utils
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
@@ -73,10 +74,10 @@ parser.add_argument('--lr', default=1e-4, type=float)
 parser.add_argument('--epochs', default=20, type=int)
 parser.add_argument('--loss', default='L1')
 
+writer = SummaryWriter('runs/'+'new_kpcn_visual_2')
 
 
-
-def validation(diffuseNet, specularNet, dataloader, eps, criterion, device, mode='kpcn'):
+def validation(diffuseNet, specularNet, dataloader, eps, criterion, device, epoch, mode='kpcn'):
   pass
   lossDiff = 0
   lossSpec = 0
@@ -114,6 +115,20 @@ def validation(diffuseNet, specularNet, dataloader, eps, criterion, device, mode
     Y_final = data['target_total'].to(device)
     Y_final = crop_like(Y_final, outputFinal)
     lossFinal += criterion(outputFinal, Y_final).item()
+
+
+    # visualize
+    if batch_idx == 0:
+      inputFinal = data['kpcn_diffuse_buffer'] * (albedo + eps) + torch.exp(data['kpcn_specular_buffer']) - 1.0
+      inputGrid = torchvision.utils.make_grid(inputFinal)
+      writer.add_image('noisy patches e{}'.format(epoch+1), inputGrid)
+
+      outputGrid = torchvision.utils.make_grid(outputFinal)
+      writer.add_image('denoised patches e{}'.format(epoch+1), outputGrid)
+
+      cleanGrid = torchvision.utils.make_grid(Y_final)
+      writer.add_image('clean patches e{}'.format(epoch+1), cleanGrid)
+
 
   return lossDiff/len(dataloader), lossSpec/len(dataloader), lossFinal/len(dataloader)
 
@@ -158,7 +173,7 @@ def train(mode, device, trainset, validset, eps, L, input_channels, hidden_chann
   valLSpec = []
   valLFinal = []
 
-  writer = SummaryWriter('runs/'+mode+'_2')
+  # writer = SummaryWriter('runs/'+mode+'_2')
   total_epoch = 0
 
 
@@ -167,7 +182,7 @@ def train(mode, device, trainset, validset, eps, L, input_channels, hidden_chann
   start = time.time()
   print('START')
 
-  print(len(dataloader))
+  # print(len(dataloader))
   # for sample_batched in tqdm(dataloader, leave=False, ncols=70):
   #     # i_batch += 1
   #     print(sample_batched.keys())
@@ -183,8 +198,11 @@ def train(mode, device, trainset, validset, eps, L, input_channels, hidden_chann
 
       # get the inputs
       X_diff = sample_batched['kpcn_diffuse_in'].to(device)
+      noisy_diff = sample_batched['kpcn_diffuse_buffer'].to(device)
 
       Y_diff = sample_batched['target_diffuse'].to(device)
+      noisy_spec = sample_batched['kpcn_specular_buffer'].to(device)
+      # print('NOISY DIFF: {}, SPEC: {}'.format(noisy_diff.shape, noisy_spec.shape))
       # print(X_diff.shape, Y_diff.shape)
       # zero the parameter gradients
       optimizerDiff.zero_grad()
@@ -200,7 +218,7 @@ def train(mode, device, trainset, validset, eps, L, input_channels, hidden_chann
         outputDiff = apply_kernel(outputDiff, X_input, device)
 
       Y_diff = crop_like(Y_diff, outputDiff)
-      # print(outputDiff.shape, Y_diff.shape)
+      # print('DIFF SHAPES : {}, {}'.format(outputDiff.shape, Y_diff.shape))
 
       lossDiff = criterion(outputDiff, Y_diff)
       lossDiff.backward()
@@ -232,6 +250,7 @@ def train(mode, device, trainset, validset, eps, L, input_channels, hidden_chann
         # albedo = sample_batched['origAlbedo'].permute(permutation).to(device)
         albedo = sample_batched['kpcn_albedo'].to(device)
         albedo = crop_like(albedo, outputDiff)
+        # print('ALBEDO SIZE: {}'.format(sample_batched['kpcn_albedo'].shape))
         outputFinal = outputDiff * (albedo + eps) + torch.exp(outputSpec) - 1.0
 
         # if False:#i_batch % 500:
@@ -253,19 +272,30 @@ def train(mode, device, trainset, validset, eps, L, input_channels, hidden_chann
         lossFinal = criterion(outputFinal, Y_final)
 
         accuLossFinal += lossFinal.item()
+      
+      # if i_batch == 0:
+      #   inputFinal = sample_batched['kpcn_diffuse_buffer'] * (sample_batched['kpcn_albedo'] + eps) + torch.exp(sample_batched['kpcn_specular_buffer']) - 1.0
+      #   inputGrid = torchvision.utils.make_grid(inputFinal)
+      #   writer.add_image('noisy patches', inputGrid)
 
-      accuLossDiff += lossDiff.item()
-      accuLossSpec += lossSpec.item()
+      #   outputGrid = torchvision.utils.make_grid(outputFinal)
+      #   writer.add_image('denoised patches', outputGrid)
+
+      #   cleanGrid = torchvision.utils.make_grid(Y_final)
+      #   writer.add_image('clean patches', cleanGrid)
+
+        accuLossDiff += lossDiff.item()
+        accuLossSpec += lossSpec.item()
 
       writer.add_scalar('total loss', accuLossFinal if accuLossFinal != float('inf') else 0, epoch * len(dataloader) + i_batch)
       writer.add_scalar('diffuse loss', accuLossDiff if accuLossDiff != float('inf') else 0, epoch * len(dataloader) + i_batch)
       writer.add_scalar('specular loss', accuLossSpec if accuLossSpec != float('inf') else 0, epoch * len(dataloader) + i_batch)
       
     print('VALIDATION WORKING!')
-    validLossDiff, validLossSpec, validLossFinal = validation(diffuseNet, specularNet, validDataloader, eps, criterion, device, mode)
-    writer.add_scalar('Valid total loss', np.log(np.abs(validLossFinal)) if accuLossFinal != float('inf') else 0, epoch * len(dataloader) + i_batch)
-    writer.add_scalar('Valid diffuse loss', validLossDiff if accuLossDiff != float('inf') else 0, epoch * len(dataloader) + i_batch)
-    writer.add_scalar('Valid specular loss', validLossSpec if accuLossSpec != float('inf') else 0, epoch * len(dataloader) + i_batch)
+    validLossDiff, validLossSpec, validLossFinal = validation(diffuseNet, specularNet, validDataloader, eps, criterion, device, epoch, mode)
+    writer.add_scalar('Valid total loss', np.log(np.abs(validLossFinal)) if accuLossFinal != float('inf') else 0, (epoch + 1) * len(dataloader))
+    writer.add_scalar('Valid diffuse loss', validLossDiff if accuLossDiff != float('inf') else 0, (epoch + 1) * len(dataloader))
+    writer.add_scalar('Valid specular loss', validLossSpec if accuLossSpec != float('inf') else 0, (epoch + 1) * len(dataloader))
 
     print("Epoch {}".format(epoch + 1))
     print("LossDiff: {}".format(accuLossDiff))
@@ -281,6 +311,9 @@ def train(mode, device, trainset, validset, eps, L, input_channels, hidden_chann
     valLDiff.append(validLossDiff)
     valLSpec.append(validLossSpec)
     valLFinal.append(validLossFinal)
+
+    torch.save(diffuseNet.state_dict(), 'trained_model/kpcn_diff_e{}.pt'.format(epoch+1))
+    torch.save(specularNet.state_dict(), 'trained_model/kpcn_spec_e{}.pt'.format(epoch+1))
 
     total_epoch += 1
     if do_early_stopping and len(valLFinal) > 10 and valLFinal[-1] >= valLFinal[-2]:
@@ -323,10 +356,10 @@ def train_dpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channel
   torch.save(ddiffuseNet.state_dict(), 'trained_model/ddiffuseNet.pt')
   torch.save(dspecularNet.state_dict(), 'trained_model/dspecularNet.pt')
   with open('plot/dpcn.csv', 'w', newline='') as f:
-    writer = csv.writer(f)
-    writer.writerow(dlDiff)
-    writer.writerow(dlSpec)
-    writer.writerow(dlFinal)
+    csv_writer = csv.writer(f)
+    csv_writer.writerow(dlDiff)
+    csv_writer.writerow(dlSpec)
+    csv_writer.writerow(dlFinal)
   return ddiffuseNet, dspecularNet, dlDiff, dlSpec, dlFinal
 
 
@@ -334,13 +367,13 @@ def train_dpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channel
 def train_kpcn(dataset, validset, device, eps, n_layers, size_kernel, in_channels, hidden_channels, epochs, lr, loss, do_early_stopping, save_dir=None):
   pass
   kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal = train('kpcn', device, dataset, validset, eps, n_layers, in_channels, hidden_channels, size_kernel, epochs, lr, loss, do_early_stopping)
-  torch.save(kdiffuseNet.state_dict(), 'trained_model/kdiffuseNet.pt')
-  torch.save(kspecularNet.state_dict(), 'trained_model/kspecularNet.pt')
+  torch.save(kdiffuseNet.state_dict(), 'trained_model/kdiffuseNet2.pt')
+  torch.save(kspecularNet.state_dict(), 'trained_model/kspecularNet2.pt')
   with open('plot/kpcn.csv', 'w', newline='') as f:
-    writer = csv.writer(f)
-    writer.writerow(klDiff)
-    writer.writerow(klSpec)
-    writer.writerow(klFinal)
+    csv_writer = csv.writer(f)
+    csv_writer.writerow(klDiff)
+    csv_writer.writerow(klSpec)
+    csv_writer.writerow(klFinal)
   return kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal
 
 
@@ -350,10 +383,10 @@ def train_feat_dpcn(dataset, validset, device, eps, n_layers, size_kernel, in_ch
   torch.save(ddiffuseNet.state_dict(), 'trained_model/feat_ddiffuseNet.pt')
   torch.save(dspecularNet.state_dict(), 'trained_model/feat_dspecularNet.pt')
   with open('plot/feat_dpcn.csv', 'w', newline='') as f:
-    writer = csv.writer(f)
-    writer.writerow(dlDiff)
-    writer.writerow(dlSpec)
-    writer.writerow(dlFinal)
+    csv_writer = csv.writer(f)
+    csv_writer.writerow(dlDiff)
+    csv_writer.writerow(dlSpec)
+    csv_writer.writerow(dlFinal)
   return ddiffuseNet, dspecularNet, dlDiff, dlSpec, dlFinal
 
 
@@ -363,10 +396,10 @@ def train_feat_kpcn(dataset, validset, device, eps, n_layers, size_kernel, in_ch
   torch.save(kdiffuseNet.state_dict(), 'trained_model/feat_kdiffuseNet.pt')
   torch.save(kspecularNet.state_dict(), 'trained_model/feat_kspecularNet.pt')
   with open('plot/feat_kpcn.csv', 'w', newline='') as f:
-    writer = csv.writer(f)
-    writer.writerow(klDiff)
-    writer.writerow(klSpec)
-    writer.writerow(klFinal)
+    csv_writer = csv.writer(f)
+    csv_writer.writerow(klDiff)
+    csv_writer.writerow(klSpec)
+    csv_writer.writerow(klFinal)
   return kdiffuseNet, kspecularNet, klDiff, klSpec, klFinal
 
 
