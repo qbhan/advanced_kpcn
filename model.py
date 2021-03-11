@@ -7,10 +7,9 @@ import torchvision.transforms as transforms
 recon_kernel_size = 21
 
 import itertools
-import visdom
 import os
 
-from basic_models import *
+from basic_models import se_layer
 from interface import KPCNInterface
 
 
@@ -40,19 +39,19 @@ def make_net(n_layers, input_channels, hidden_channels, kernel_size, mode):
   return nn.Sequential(*layers)
 
 
-def make_feat_net(n_layers, input_channels, hidden_channels, kernel_size, mode):
+def make_senet(n_layers, input_channels, hidden_channels, kernel_size, mode):
   # create first layer manually
   layers = [
       nn.Conv2d(input_channels, hidden_channels, kernel_size),
       nn.ReLU(),
-      featAttnBlock(hidden_channels, reduction=8)
+      se_layer(hidden_channels, reduction=8)
   ]
   
   for l in range(n_layers-2):
     layers += [
         nn.Conv2d(hidden_channels, hidden_channels, kernel_size),
         nn.ReLU(),
-        featAttnBlock(hidden_channels, reduction=8)
+        se_layer(hidden_channels, reduction=8)
     ]
     
     params = sum(p.numel() for p in layers[-2].parameters() if p.requires_grad)
