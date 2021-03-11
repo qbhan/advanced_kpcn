@@ -119,7 +119,7 @@ def validation(diffuseNet, specularNet, dataloader, eps, criterion, device, epoc
 
     # visualize
     if batch_idx == 0:
-      inputFinal = data['kpcn_diffuse_buffer'] * (albedo + eps) + torch.exp(data['kpcn_specular_buffer']) - 1.0
+      inputFinal = data['kpcn_diffuse_buffer'] * (data['kpcn_albedo'] + eps) + torch.exp(data['kpcn_specular_buffer']) - 1.0
       inputGrid = torchvision.utils.make_grid(inputFinal)
       writer.add_image('noisy patches e{}'.format(epoch+1), inputGrid)
 
@@ -130,7 +130,7 @@ def validation(diffuseNet, specularNet, dataloader, eps, criterion, device, epoc
       writer.add_image('clean patches e{}'.format(epoch+1), cleanGrid)
 
 
-  return lossDiff/len(dataloader), lossSpec/len(dataloader), lossFinal/len(dataloader)
+  return lossDiff/(4*len(dataloader)), lossSpec/(4*len(dataloader)), lossFinal/(4*len(dataloader))
 
 def train(mode, device, trainset, validset, eps, L, input_channels, hidden_channels, kernel_size, epochs, learning_rate, loss, do_early_stopping, show_images=False):
   # print('TRAINING WITH VALIDDATASET : {}'.format(validset))
@@ -287,13 +287,20 @@ def train(mode, device, trainset, validset, eps, L, input_channels, hidden_chann
         accuLossDiff += lossDiff.item()
         accuLossSpec += lossSpec.item()
 
-      writer.add_scalar('total loss', accuLossFinal if accuLossFinal != float('inf') else 0, epoch * len(dataloader) + i_batch)
-      writer.add_scalar('diffuse loss', accuLossDiff if accuLossDiff != float('inf') else 0, epoch * len(dataloader) + i_batch)
-      writer.add_scalar('specular loss', accuLossSpec if accuLossSpec != float('inf') else 0, epoch * len(dataloader) + i_batch)
-      
-    print('VALIDATION WORKING!')
+        # writer.add_scalar('total loss', accuLossFinal if accuLossFinal != float('inf') else 0, epoch * len(dataloader) + i_batch)
+        # writer.add_scalar('diffuse loss', accuLossDiff if accuLossDiff != float('inf') else 0, epoch * len(dataloader) + i_batch)
+        # writer.add_scalar('specular loss', accuLossSpec if accuLossSpec != float('inf') else 0, epoch * len(dataloader) + i_batch)
+        writer.add_scalar('lossFinal',  lossFinal if lossFinal != float('inf') else 1e+35, epoch * len(dataloader) + i_batch)
+        writer.add_scalar('lossDiffuse', lossDiff if lossDiff != float('inf') else 1e+35, epoch * len(dataloader) + i_batch)
+        writer.add_scalar('lossSpec', lossSpec if lossSpec != float('inf') else 1e+35, epoch * len(dataloader) + i_batch)
+    
+    accuLossDiff, accuLossSpec, accuLossFinal = accuLossDiff/(8*len(dataloader)), accuLossSpec/(8*len(dataloader)), accuLossFinal/(8*len(dataloader))
+    writer.add_scalar('Train total loss', accuLossFinal if accuLossFinal != float('inf') else 1e+35, epoch * len(dataloader) + i_batch)
+    writer.add_scalar('Train diffuse loss', accuLossDiff if accuLossDiff != float('inf') else 1e+35, epoch * len(dataloader) + i_batch)
+    writer.add_scalar('Train specular loss', accuLossSpec if accuLossSpec != float('inf') else 1e+35, epoch * len(dataloader) + i_batch)
+    # print('VALIDATION WORKING!')
     validLossDiff, validLossSpec, validLossFinal = validation(diffuseNet, specularNet, validDataloader, eps, criterion, device, epoch, mode)
-    writer.add_scalar('Valid total loss', np.log(np.abs(validLossFinal)) if accuLossFinal != float('inf') else 0, (epoch + 1) * len(dataloader))
+    writer.add_scalar('Valid total loss', validLossFinal if accuLossFinal != float('inf') else 0, (epoch + 1) * len(dataloader))
     writer.add_scalar('Valid diffuse loss', validLossDiff if accuLossDiff != float('inf') else 0, (epoch + 1) * len(dataloader))
     writer.add_scalar('Valid specular loss', validLossSpec if accuLossSpec != float('inf') else 0, (epoch + 1) * len(dataloader))
 
