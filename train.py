@@ -74,7 +74,7 @@ parser.add_argument('--lr', default=1e-4, type=float)
 parser.add_argument('--epochs', default=20, type=int)
 parser.add_argument('--loss', default='L1')
 
-writer = SummaryWriter('runs/'+'new_kpcn_visual_2')
+writer = SummaryWriter('runs/'+'new_kpcn_visual_3')
 
 
 def validation(diffuseNet, specularNet, dataloader, eps, criterion, device, epoch, mode='kpcn'):
@@ -82,43 +82,46 @@ def validation(diffuseNet, specularNet, dataloader, eps, criterion, device, epoc
   lossDiff = 0
   lossSpec = 0
   lossFinal = 0
-  for batch_idx, data in enumerate(dataloader):
-    X_diff = data['kpcn_diffuse_in'].to(device)
-    Y_diff = data['target_diffuse'].to(device)
+  print('VALIDATION LEN : {}'.format(len(dataloader)))
+  with torch.no_grad():
+    for batch_idx, data in enumerate(dataloader):
+      X_diff = data['kpcn_diffuse_in'].to(device)
+      Y_diff = data['target_diffuse'].to(device)
 
-    outputDiff = diffuseNet(X_diff)
-    # if mode == 'KPCN':
-    if 'kpcn' in mode:
-      X_input = crop_like(X_diff, outputDiff)
-      outputDiff = apply_kernel(outputDiff, X_input, device)
+      outputDiff = diffuseNet(X_diff)
+      # if mode == 'KPCN':
+      if 'kpcn' in mode:
+        X_input = crop_like(X_diff, outputDiff)
+        outputDiff = apply_kernel(outputDiff, X_input, device)
 
-    Y_diff = crop_like(Y_diff, outputDiff)
-    lossDiff += criterion(outputDiff, Y_diff).item()
+      Y_diff = crop_like(Y_diff, outputDiff)
+      lossDiff += criterion(outputDiff, Y_diff).item()
 
-    X_spec = data['kpcn_specular_in'].to(device)
-    Y_spec = data['target_specular'].to(device)
-    
-    outputSpec = specularNet(X_spec)
-    # if mode == 'KPCN':
-    if 'kpcn' in mode:
-      X_input = crop_like(X_spec, outputSpec)
-      outputSpec = apply_kernel(outputSpec, X_input, device)
+      X_spec = data['kpcn_specular_in'].to(device)
+      Y_spec = data['target_specular'].to(device)
+      
+      outputSpec = specularNet(X_spec)
+      # if mode == 'KPCN':
+      if 'kpcn' in mode:
+        X_input = crop_like(X_spec, outputSpec)
+        outputSpec = apply_kernel(outputSpec, X_input, device)
 
-    Y_spec = crop_like(Y_spec, outputSpec)
-    lossSpec += criterion(outputSpec, Y_spec).item()
+      Y_spec = crop_like(Y_spec, outputSpec)
+      lossSpec += criterion(outputSpec, Y_spec).item()
 
-    # calculate final ground truth error
-    albedo = data['kpcn_albedo'].to(device)
-    albedo = crop_like(albedo, outputDiff)
-    outputFinal = outputDiff * (albedo + eps) + torch.exp(outputSpec) - 1.0
+      # calculate final ground truth error
+      albedo = data['kpcn_albedo'].to(device)
+      albedo = crop_like(albedo, outputDiff)
+      outputFinal = outputDiff * (albedo + eps) + torch.exp(outputSpec) - 1.0
 
-    Y_final = data['target_total'].to(device)
-    Y_final = crop_like(Y_final, outputFinal)
-    lossFinal += criterion(outputFinal, Y_final).item()
+      Y_final = data['target_total'].to(device)
+      Y_final = crop_like(Y_final, outputFinal)
+      lossFinal += criterion(outputFinal, Y_final).item()
 
 
-    # visualize
-    if batch_idx == 0:
+      # visualize
+      # if batch_idx == 0:
+      # print('Visualize init results')
       inputFinal = data['kpcn_diffuse_buffer'] * (data['kpcn_albedo'] + eps) + torch.exp(data['kpcn_specular_buffer']) - 1.0
       inputGrid = torchvision.utils.make_grid(inputFinal)
       writer.add_image('noisy patches e{}'.format(epoch+1), inputGrid)
@@ -143,8 +146,8 @@ def train(mode, device, trainset, validset, eps, L, input_channels, hidden_chann
   # instantiate networks
   print(L, input_channels, hidden_channels, kernel_size, mode)
   if 'feat' in mode:
-    diffuseNet = make_feat_net(L, input_channels, hidden_channels, kernel_size, mode).to(device)
-    specularNet = make_feat_net(L, input_channels, hidden_channels, kernel_size, mode).to(device)
+    diffuseNet = make_senet(L, input_channels, hidden_channels, kernel_size, mode).to(device)
+    specularNet = make_senet(L, input_channels, hidden_channels, kernel_size, mode).to(device)
   else:
     print(mode)
     diffuseNet = make_net(L, input_channels, hidden_channels, kernel_size, mode).to(device)
@@ -177,10 +180,18 @@ def train(mode, device, trainset, validset, eps, L, input_channels, hidden_chann
   total_epoch = 0
 
 
+  print('Check Initialization')
+  initLossDiff, initLossSpec, initLossFinal = validation(diffuseNet, specularNet, validDataloader, eps, criterion, device, -1, mode)
+  print("initLossDiff: {}".format(initLossDiff))
+  print("initLossSpec: {}".format(initLossSpec))
+  print("initLossFinal: {}".format(initLossFinal))
+  # writer 
+
+
   import time
 
   start = time.time()
-  print('START')
+  print('Start Training')
 
   # print(len(dataloader))
   # for sample_batched in tqdm(dataloader, leave=False, ncols=70):
@@ -194,6 +205,8 @@ def train(mode, device, trainset, validset, eps, L, input_channels, hidden_chann
     i_batch = -1
     for sample_batched in tqdm(dataloader, leave=False, ncols=70):
       i_batch += 1
+      # if i_batch > 144:
+      #   break
       # print(sample_batched.keys())
 
       # get the inputs
@@ -253,17 +266,17 @@ def train(mode, device, trainset, validset, eps, L, input_channels, hidden_chann
         # print('ALBEDO SIZE: {}'.format(sample_batched['kpcn_albedo'].shape))
         outputFinal = outputDiff * (albedo + eps) + torch.exp(outputSpec) - 1.0
 
-        # if False:#i_batch % 500:
-        #   print("Sample, denoised, gt")
-        #   sz = 3
-        #   orig = crop_like(sample_batched['finalInput'].permute(permutation), outputFinal)
-        #   orig = orig.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
-        #   show_data(orig, figsize=(sz,sz), normalize=True)
-        #   img = outputFinal.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
-        #   show_data(img, figsize=(sz,sz), normalize=True)
-        #   gt = crop_like(sample_batched['finalGt'].permute(permutation), outputFinal)
-        #   gt = gt.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
-        #   show_data(gt, figsize=(sz,sz), normalize=True)
+        if False:#i_batch % 500:
+          print("Sample, denoised, gt")
+          sz = 3
+          orig = crop_like(sample_batched['finalInput'].permute(permutation), outputFinal)
+          orig = orig.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
+          show_data(orig, figsize=(sz,sz), normalize=True)
+          img = outputFinal.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
+          show_data(img, figsize=(sz,sz), normalize=True)
+          gt = crop_like(sample_batched['finalGt'].permute(permutation), outputFinal)
+          gt = gt.cpu().permute([0, 2, 3, 1]).numpy()[0,:]
+          show_data(gt, figsize=(sz,sz), normalize=True)
 
         Y_final = sample_batched['target_total'].to(device)
 
