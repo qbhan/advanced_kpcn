@@ -10,7 +10,7 @@ import itertools
 import os
 
 from basic_models import se_layer
-from interface import KPCNInterface
+
 
 
 def make_net(n_layers, input_channels, hidden_channels, kernel_size, mode):
@@ -34,7 +34,7 @@ def make_net(n_layers, input_channels, hidden_channels, kernel_size, mode):
   
   for layer in layers:
     if isinstance(layer, nn.Conv2d):
-      nn.init.xavier_uniform_(layer.weight)
+      nn.init.xavier_uniform_(layer.weight.data)
   
   return nn.Sequential(*layers)
 
@@ -84,16 +84,17 @@ def make_senet(n_layers, input_channels, hidden_channels, kernel_size, mode):
 def apply_kernel(weights, data, device):
     # print('WEIGHTS: {}, DATA : {}'.format(weights.shape, data.shape))
     # apply softmax to kernel weights
-    # weights = weights.permute((0, 2, 3, 1)).to(device)
+    weights = weights.permute((0, 2, 3, 1)).to(device)
     weights = weights.to(device)
+    # print(weights.shape, data.shape)
     _, _, h, w = data.size()
     weights = F.softmax(weights, dim=3).view(-1, w * h, recon_kernel_size, recon_kernel_size)
-
+    # print(weights.shape)
     # now we have to apply kernels to every pixel
     # first pad the input
     r = recon_kernel_size // 2
     data = F.pad(data[:,:3,:,:], (r,) * 4, "reflect")
-    
+    # print(data.shape)
     #print(data[0,:,:,:])
     
     # make slices
