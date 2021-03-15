@@ -312,13 +312,15 @@ class DenoiseDataset(Dataset):
         if sampling == 'random':
             self.patches_per_image = (256 // batch_size) * batch_size
         elif sampling == 'grid':
-            self.patches_per_image = 100
+            # self.patches_per_image = 100
+            self.patches_per_image = 64
         else:
             raise RuntimeError("Unknown training mode %s" % mode)
         self.samples = None
     
     def __len__(self):
         return len(self.gt_files) * self.patches_per_image
+        # return len(self.gt_files) * 8
 
 # Preprocessing
     def _gradients(self, buf):
@@ -912,6 +914,7 @@ class DenoiseDataset(Dataset):
                             patch[k] = sample[k]
                     
                     self.samples.append(patch)
+        # print('TOTAL SAMPLES FOR SIZE {}, {}: {}'.format(h, w, len(self.samples)))
 
 # Statistics
     def _load_raw_data(self, img_idx):
@@ -1197,13 +1200,17 @@ class DenoiseDataset(Dataset):
                 specular_sample['ref'] = np.log(1 + total - diffuse)
 
             # Patch sampling probability map
-            prob_fn = in_fn[:in_fn.rfind('.')] + '_prob_imp' + in_fn[in_fn.rfind('.'):]
-            prob_fn = get_valid_path(prob_fn)
+            # prob_fn = in_fn[:in_fn.rfind('.')] + '_prob_imp' + in_fn[in_fn.rfind('.'):]
+            # prob_fn = get_valid_path(prob_fn)
 
-            prob_map = np.load(prob_fn)
+            # prob_map = np.load(prob_fn)
 
           
             if self.sampling == 'random':
+                prob_fn = in_fn[:in_fn.rfind('.')] + '_prob_imp' + in_fn[in_fn.rfind('.'):]
+                prob_fn = get_valid_path(prob_fn)
+
+                prob_map = np.load(prob_fn)
                 if (self.base_model == self.AMCD):
                     self._sample_patches((diffuse_sample, specular_sample), prob_map)
                 else:
@@ -1217,6 +1224,7 @@ class DenoiseDataset(Dataset):
             else:
                 raise RuntimeError("Unknown training mode %s" % self.mode)
         if self.samples != None: len(self.samples)
+        # print(len(self.samples), pat_idx)
         out = self.samples[pat_idx]
         #if self.sampling == 'random':
         #    out = self._random_rot(self._random_flip(out))
