@@ -3,7 +3,7 @@ import sys
 import gc
 import matplotlib.pyplot as plt
 import numpy as np
-
+import os
 
 def to_torch_tensors(data):
   if isinstance(data, dict):
@@ -113,3 +113,26 @@ def crop_like(src, tgt):
                    crop[1]:src_sz[-1]-crop2[1]]
     else:
         return src
+
+
+def trial_name(args):
+  train_dir = 'trained_model'
+  trial = args.mode
+  if args.lr != 1e-4:
+    trial += '_' + str(args.lr)
+  if args.loss != 'L1':
+    trial += '_' + args.loss
+
+  # add more values
+
+  # print(trial)
+
+  # check if the same trial exists
+  i = 1
+  trial += '_' + str(i)
+  while os.path.exists(os.path.join(train_dir, trial)):
+    i += 1
+    trial = trial[:-1] + str(i)
+
+  # print(os.path.join(train_dir, trial))
+  return trial
