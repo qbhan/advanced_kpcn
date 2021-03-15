@@ -350,6 +350,7 @@ class ContextBlock2d(nn.Module):
 
 
 # ECA-Net: Efficient Channel Attention for Deep Convolutional Neural Networks, CVPR 2020
+# https://github.com/BangguWu/ECANet/blob/master/models/eca_module.py
 class eca_layer(nn.Module):
     def __init__(self, channel, k_size=3):
         super(eca_layer, self).__init__()
