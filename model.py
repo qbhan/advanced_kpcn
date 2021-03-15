@@ -9,28 +9,30 @@ recon_kernel_size = 21
 import itertools
 import os
 
-from basic_models import se_layer
+from basic_models import eca_layer
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-
-def make_net(n_layers, input_channels, hidden_channels, kernel_size, mode):
+def make_net(args):
   # create first layer manually
   layers = [
-      nn.Conv2d(input_channels, hidden_channels, kernel_size),
+      nn.Conv2d(args.input_channels, args.hidden_channels, args.kernel_size),
       nn.ReLU()
   ]
   
-  for l in range(n_layers-2):
+  for l in range(args.num_layers-2):
     layers += [
-        nn.Conv2d(hidden_channels, hidden_channels, kernel_size),
+        nn.Conv2d(args.hidden_channels, args.hidden_channels, args.kernel_size),
         nn.ReLU()
     ]
     
-    params = sum(p.numel() for p in layers[-2].parameters() if p.requires_grad)
-    print("Params : {}".format(params))
+    # params = sum(p.numel() for p in layers[-2].parameters() if p.requires_grad)
+    # print("Params : {}".format(params))
     
-  out_channels = 3 if 'dpcn' in mode else recon_kernel_size**2
-  layers += [nn.Conv2d(hidden_channels, out_channels, kernel_size)]#, padding=18)]
+  out_channels = 3 if 'dpcn' in args.mode else recon_kernel_size**2
+  layers += [nn.Conv2d(args.hidden_channels, out_channels, args.kernel_size)]#, padding=18)]
   
   for layer in layers:
     if isinstance(layer, nn.Conv2d):
@@ -39,26 +41,26 @@ def make_net(n_layers, input_channels, hidden_channels, kernel_size, mode):
   return nn.Sequential(*layers)
 
 
-def make_senet(n_layers, input_channels, hidden_channels, kernel_size, mode):
+def make_ecanet(args):
   # create first layer manually
   layers = [
-      nn.Conv2d(input_channels, hidden_channels, kernel_size),
+      nn.Conv2d(args.input_channels, args.hidden_channels, args.kernel_size),
       nn.ReLU(),
-      se_layer(hidden_channels, reduction=8)
+      eca_layer(args.hidden_channels)
   ]
   
-  for l in range(n_layers-2):
+  for l in range(args.num_layers-2):
     layers += [
-        nn.Conv2d(hidden_channels, hidden_channels, kernel_size),
+        nn.Conv2d(args.hidden_channels, args.hidden_channels, args.kernel_size),
         nn.ReLU(),
-        se_layer(hidden_channels, reduction=8)
+        eca_layer(args.hidden_channels)
     ]
     
-    params = sum(p.numel() for p in layers[-2].parameters() if p.requires_grad)
-    print("Params : {}".format(params))
+    # params = sum(p.numel() for p in layers[-2].parameters() if p.requires_grad)
+    # print("Params : {}".format(params))
     
-  out_channels = 3 if 'dpcn' in mode else recon_kernel_size**2
-  layers += [nn.Conv2d(hidden_channels, out_channels, kernel_size)]#, padding=18)]
+  out_channels = 3 if 'dpcn' in args.mode else recon_kernel_size**2
+  layers += [nn.Conv2d(args.hidden_channels, out_channels, args.kernel_size)]#, padding=18)]
   
   for layer in layers:
     if isinstance(layer, nn.Conv2d):
