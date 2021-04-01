@@ -129,7 +129,7 @@ class ChannelGate(nn.Module):
             else:
                 channel_att_sum = channel_att_sum + channel_att_raw
 
-        scale = F.sigmoid( channel_att_sum ).unsqueeze(2).unsqueeze(3).expand_as(x)
+        scale = torch.sigmoid( channel_att_sum ).unsqueeze(2).unsqueeze(3).expand_as(x)
         return x * scale
 
 class SpatialGate(nn.Module):
@@ -141,7 +141,7 @@ class SpatialGate(nn.Module):
     def forward(self, x):
         x_compress = self.compress(x)
         x_out = self.spatial(x_compress)
-        scale = F.sigmoid(x_out) # broadcasting
+        scale = torch.sigmoid(x_out) # broadcasting
         return x * scale
 
 class cbam(nn.Module):
@@ -351,11 +351,13 @@ class ContextBlock2d(nn.Module):
 
 # ECA-Net: Efficient Channel Attention for Deep Convolutional Neural Networks, CVPR 2020
 class eca_layer(nn.Module):
-    def __init__(self, channel, k_size=3):
+    def __init__(self, k_size=3):
         super(eca_layer, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False)
         self.sigmoid = nn.Sigmoid()
+
+        nn.init.xavier_uniform_(self.conv.weight)
     
     def forward(self, x):
         b, c, h, w = x.size()
@@ -364,3 +366,27 @@ class eca_layer(nn.Module):
         y = y.transpose(-1, -2).unsqueeze(-1)
         y = self.sigmoid(y)
         return x * y.expand_as(x)
+
+
+class simple_feat_layer(nn.Module):
+    def __init__(self, num_channel, debug=False):
+        super(simple_feat_layer, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc1 = nn.Linear(num_channel, num_channel, bias=False)
+        self.fc2 = nn.Linear(num_channel, num_channel, bias=False)
+        self.sigmoid = nn.Sigmoid()
+        self.relu = nn.ReLU()
+        self.debug = debug
+
+    def forward(self, x):
+        b, c, h, w = x.size()
+        # print(b, c, h, w)
+        y = self.avg_pool(x).view(b, c)
+        # y = self.relu(self.fc1(y))
+        y = self.sigmoid(self.fc2(y))
+        # if self.debug and not self.training:
+        #     print(y)
+            
+        y = y.view(b, c, 1, 1)
+        # print(y.shape)
+        return x * y.expand((b, c, h, w))   # 0.5로 곱해보기

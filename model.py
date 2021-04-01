@@ -9,7 +9,7 @@ recon_kernel_size = 21
 import itertools
 import os
 
-from basic_models import se_layer
+from basic_models import se_layer, eca_layer, cbam, simple_feat_layer
 
 
 
@@ -27,7 +27,7 @@ def make_net(n_layers, input_channels, hidden_channels, kernel_size, mode):
     ]
     
     params = sum(p.numel() for p in layers[-2].parameters() if p.requires_grad)
-    print("Params : {}".format(params))
+    # print("Params : {}".format(params))
     
   out_channels = 3 if 'dpcn' in mode else recon_kernel_size**2
   layers += [nn.Conv2d(hidden_channels, out_channels, kernel_size)]#, padding=18)]
@@ -55,7 +55,92 @@ def make_senet(n_layers, input_channels, hidden_channels, kernel_size, mode):
     ]
     
     params = sum(p.numel() for p in layers[-2].parameters() if p.requires_grad)
-    print("Params : {}".format(params))
+    # print("Params : {}".format(params))
+    
+  out_channels = 3 if 'dpcn' in mode else recon_kernel_size**2
+  layers += [nn.Conv2d(hidden_channels, out_channels, kernel_size)]#, padding=18)]
+  
+  for layer in layers:
+    if isinstance(layer, nn.Conv2d):
+      nn.init.xavier_uniform_(layer.weight)
+  
+  return nn.Sequential(*layers)
+
+
+def make_ecanet(n_layers, input_channels, hidden_channels, kernel_size, mode):
+  # create first layer manually
+  layers = [
+      nn.Conv2d(input_channels, hidden_channels, kernel_size),
+      nn.ReLU(),
+      eca_layer()
+  ]
+  
+  for l in range(n_layers-2):
+    layers += [
+        nn.Conv2d(hidden_channels, hidden_channels, kernel_size),
+        nn.ReLU(),
+        eca_layer()
+    ]
+    
+    params = sum(p.numel() for p in layers[-2].parameters() if p.requires_grad)
+    # print("Params : {}".format(params))
+    
+  out_channels = 3 if 'dpcn' in mode else recon_kernel_size**2
+  layers += [nn.Conv2d(hidden_channels, out_channels, kernel_size)]#, padding=18)]
+  
+  for layer in layers:
+    if isinstance(layer, nn.Conv2d):
+      nn.init.xavier_uniform_(layer.weight)
+  
+  return nn.Sequential(*layers)
+
+
+def make_cbamnet(n_layers, input_channels, hidden_channels, kernel_size, mode):
+  # create first layer manually
+  layers = [
+      nn.Conv2d(input_channels, hidden_channels, kernel_size),
+      nn.ReLU(),
+      cbam(hidden_channels, reduction_ratio=4)
+  ]
+  
+  for l in range(n_layers-2):
+    layers += [
+        nn.Conv2d(hidden_channels, hidden_channels, kernel_size),
+        nn.ReLU(),
+        cbam(hidden_channels, reduction_ratio=4)
+    ]
+    
+    params = sum(p.numel() for p in layers[-2].parameters() if p.requires_grad)
+    # print("Params : {}".format(params))
+    
+  out_channels = 3 if 'dpcn' in mode else recon_kernel_size**2
+  layers += [nn.Conv2d(hidden_channels, out_channels, kernel_size)]#, padding=18)]
+  
+  for layer in layers:
+    if isinstance(layer, nn.Conv2d):
+      nn.init.xavier_uniform_(layer.weight)
+  
+  return nn.Sequential(*layers)
+
+
+def make_simple_feat_net(n_layers, input_channels, hidden_channels, kernel_size, mode):
+  # create first layer manually
+  print('make simple feat')
+  layers = [
+      nn.Conv2d(input_channels, hidden_channels, kernel_size),
+      nn.ReLU(),
+      simple_feat_layer(hidden_channels, debug=True)
+  ]
+  
+  for l in range(n_layers-2):
+    layers += [
+        nn.Conv2d(hidden_channels, hidden_channels, kernel_size),
+        nn.ReLU(),
+        simple_feat_layer(hidden_channels)
+    ]
+    
+    params = sum(p.numel() for p in layers[-2].parameters() if p.requires_grad)
+    # print("Params : {}".format(params))
     
   out_channels = 3 if 'dpcn' in mode else recon_kernel_size**2
   layers += [nn.Conv2d(hidden_channels, out_channels, kernel_size)]#, padding=18)]
@@ -85,7 +170,6 @@ def apply_kernel(weights, data, device):
     # print('WEIGHTS: {}, DATA : {}'.format(weights.shape, data.shape))
     # apply softmax to kernel weights
     weights = weights.permute((0, 2, 3, 1)).to(device)
-    weights = weights.to(device)
     # print(weights.shape, data.shape)
     _, _, h, w = data.size()
     weights = F.softmax(weights, dim=3).view(-1, w * h, recon_kernel_size, recon_kernel_size)

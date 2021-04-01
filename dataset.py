@@ -28,7 +28,7 @@ class KPCNDataset(torch.utils.data.Dataset):
     return self.samples[idx]
 
 
-random.seed('Kyubeom Han')
+random.seed("Kyubeom Han, Inyoung Cho, Yuchi Huo, Sungeui Yoon @ KAIST")
 
 
 def gradient_importance_map(img):
@@ -200,7 +200,7 @@ class DenoiseDataset(Dataset):
         if mode not in ['train', 'val', 'test']:
             raise RuntimeError("Unknown training mode %s" % mode)
         
-        if sampling not in ['random', 'grid']:
+        if sampling not in ['random', 'grid', 'recon']:
             raise RuntimeError("Unknown training mode %s" % mode)
 
         if base_model == self.LBMC:
@@ -305,7 +305,7 @@ class DenoiseDataset(Dataset):
         }
 
         # Set random seeds
-        random.seed("Inyoung Cho, Yuchi Huo, Sungeui Yoon @ KAIST")
+        random.seed("Kyubeom Han, Inyoung Cho, Yuchi Huo, Sungeui Yoon @ KAIST")
         random.shuffle(self.gt_files)
 
         # Constants for patch importance sampling
@@ -313,6 +313,8 @@ class DenoiseDataset(Dataset):
             self.patches_per_image = (256 // batch_size) * batch_size
         elif sampling == 'grid':
             self.patches_per_image = 100
+        elif sampling == 'recon':
+            self.patches_per_image = 15 * 15
         else:
             raise RuntimeError("Unknown training mode %s" % mode)
         self.samples = None
@@ -913,6 +915,52 @@ class DenoiseDataset(Dataset):
                     
                     self.samples.append(patch)
 
+    def _recon_patches(self, sample):
+        """Return all grid patches
+        """
+        self.samples = []
+        if self.base_model == 'sbmc':
+            h, w, _, = sample['target_image'].shape
+        elif self.base_model == 'kpcn':
+            h, w, _, = sample['target_diffuse'].shape
+        elif self.base_model == 'amcd':
+            h, w, _, = sample[0]['ref'].shape
+
+        # Suppose that self.PATCH_SIZE is 128
+        sample_num = len(self.samples)
+        for x in range(0, h-127, self.PATCH_SIZE // 2):
+            for y in range(0, w-127, self.PATCH_SIZE // 2):
+                if type(sample) == tuple:
+                    assert len(sample) == 2, 'behavior undefined.: %f'%(len(sample))
+
+                    patch_1 = {}
+                    patch_2 = {}
+                    sample_1, sample_2 = sample
+
+                    for k in sample_1:
+                        if type(sample_1[k]) == np.ndarray or type(sample_1[k]) == np.memmap:
+                            patch_1[k] = sample_1[k][x:x+self.PATCH_SIZE,y:y+self.PATCH_SIZE,...]
+                        else:
+                            patch_1[k] = sample_1[k]
+                    
+                    for k in sample_2:
+                        if type(sample_2[k]) == np.ndarray or type(sample_2[k]) == np.memmap:
+                            patch_2[k] = sample_2[k][x:x+self.PATCH_SIZE,y:y+self.PATCH_SIZE,...]
+                        else:
+                            patch_2[k] = sample_2[k]
+
+                    self.samples.append((patch_1, patch_2))
+                else:
+                    patch = {}
+                    for k in sample:
+                        if type(sample[k]) == np.ndarray or type(sample[k]) == np.memmap:
+                            patch[k] = sample[k][x:x+self.PATCH_SIZE,y:y+self.PATCH_SIZE,...]
+                        else:
+                            patch[k] = sample[k]
+                    
+                    self.samples.append(patch)
+        # print('MADE {} PATCHES'.format(len(self.samples)-sample_num))
+
 # Statistics
     def _load_raw_data(self, img_idx):
         """
@@ -1074,6 +1122,7 @@ class DenoiseDataset(Dataset):
             
             # Input processing
             in_fn = self.gt_files[img_idx].replace(os.sep + 'gt' + os.sep, os.sep + 'input' + os.sep)
+            # print(in_fn.split('/')[-1])
             
             if (self.base_model == self.SBMC):
                 sbmc_s_fn = in_fn[:in_fn.rfind('.')] + '_sbmc_s' + in_fn[in_fn.rfind('.'):]
@@ -1196,14 +1245,19 @@ class DenoiseDataset(Dataset):
                 diffuse_sample['ref'] = diffuse / (albedo + 0.00316)
                 specular_sample['ref'] = np.log(1 + total - diffuse)
 
-            # Patch sampling probability map
-            prob_fn = in_fn[:in_fn.rfind('.')] + '_prob_imp' + in_fn[in_fn.rfind('.'):]
-            prob_fn = get_valid_path(prob_fn)
+            # # Patch sampling probability map
+            # prob_fn = in_fn[:in_fn.rfind('.')] + '_prob_imp' + in_fn[in_fn.rfind('.'):]
+            # prob_fn = get_valid_path(prob_fn)
 
-            prob_map = np.load(prob_fn)
+            # prob_map = np.load(prob_fn)
 
           
             if self.sampling == 'random':
+                # Patch sampling probability map
+                prob_fn = in_fn[:in_fn.rfind('.')] + '_prob_imp' + in_fn[in_fn.rfind('.'):]
+                prob_fn = get_valid_path(prob_fn)
+
+                prob_map = np.load(prob_fn)
                 if (self.base_model == self.AMCD):
                     self._sample_patches((diffuse_sample, specular_sample), prob_map)
                 else:
@@ -1214,6 +1268,11 @@ class DenoiseDataset(Dataset):
                     self._full_patches((diffuse_sample, specular_sample))
                 else:
                     self._full_patches(sample)
+            elif self.sampling == 'recon':
+                if (self.base_model == self.AMCD):
+                    self._recon_patches((diffuse_sample, specular_sample))
+                else:
+                    self._recon_patches(sample)
             else:
                 raise RuntimeError("Unknown training mode %s" % self.mode)
         if self.samples != None: len(self.samples)
