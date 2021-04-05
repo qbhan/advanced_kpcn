@@ -130,9 +130,9 @@ def denoise(diffuseNet, specularNet, dataloader, device, mode, save_dir, debug=F
         # inputGrid = torchvision.utils.make_grid(input_image)
         # outputGrid = torchvision.utils.make_grid(output_image)
         # cleanGrid = torchvision.utils.make_grid(gt_image)
-        save_image(input_image, save_dir + '/test{}/noisy.png'.format(image_idx))
-        save_image(output_image, save_dir + '/test{}/denoise.png'.format(image_idx))
-        save_image(gt_image, save_dir + '/test{}/clean.png'.format(image_idx))
+        save_image(ToneMapTest(input_image), save_dir + '/test{}/noisy.png'.format(image_idx))
+        save_image(ToneMapTest(output_image), save_dir + '/test{}/denoise.png'.format(image_idx))
+        save_image(ToneMapTest(gt_image), save_dir + '/test{}/clean.png'.format(image_idx))
         # print('SAVED IMAGES')
         x, y = 0, 0
         image_idx += 1
